@@ -1,6 +1,7 @@
 import React from 'react';
-import { Megaphone, Clock, Calendar, AlertCircle, ArrowUpRight, Play, CheckSquare } from 'lucide-react';
+import { Megaphone, Clock, Calendar, AlertCircle, ArrowUpRight, Play, CheckSquare, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import CampaignModal from '../components/CampaignModal';
 
 const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend }) => (
     <div className="card group hover:scale-[1.02] transition-transform duration-200 cursor-pointer">
@@ -36,13 +37,23 @@ const ActivityItem = ({ title, time, type }) => (
 
 const Dashboard = () => {
     const { user } = useAuth();
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
     const userName = user?.email?.split('@')[0] || 'there';
 
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
-            <div>
-                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h2>
-                <p className="text-slate-500 mt-1">Good morning, {userName.charAt(0).toUpperCase() + userName.slice(1)}. Here's what's happening.</p>
+            <div className="flex justify-between items-end">
+                <div>
+                    <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h2>
+                    <p className="text-slate-500 mt-1">Good morning, {userName.charAt(0).toUpperCase() + userName.slice(1)}. Here's what's happening.</p>
+                </div>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-100 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px]"
+                >
+                    <Plus className="w-5 h-5" />
+                    New Campaign
+                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -114,6 +125,7 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
+            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
         </div>
     );
 };

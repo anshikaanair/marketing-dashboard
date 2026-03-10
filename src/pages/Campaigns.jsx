@@ -74,13 +74,6 @@ const Campaigns = () => {
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight">Campaigns</h2>
                     <p className="text-slate-500 mt-2 font-medium">6 campaigns across 3 brands</p>
                 </div>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px]"
-                >
-                    <Plus className="w-5 h-5" />
-                    New Campaign
-                </button>
             </div>
 
             <div className="space-y-4">

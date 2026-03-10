@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook } from 'lucide-react';
+import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2 } from 'lucide-react';
 
 const CampaignModal = ({ isOpen, onClose }) => {
     const [step, setStep] = useState(1);
+    const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
         brand: '',
         productName: '',
@@ -14,52 +15,81 @@ const CampaignModal = ({ isOpen, onClose }) => {
     });
 
     const [generatedCopy, setGeneratedCopy] = useState(null);
-    const [activePlatform, setActivePlatform] = useState('LinkedIn');
+    const [activePlatform, setActivePlatform] = useState('');
     const [activeVariant, setActiveVariant] = useState(1);
 
     if (!isOpen) return null;
 
-    const handleGenerate = () => {
-        // Mocking the generation logic
-        setGeneratedCopy({
-            LinkedIn: [
-                {
-                    title: "Tired of copying data between tools manually?",
-                    body: "DataSync Pro connects your entire tech stack — 200+ integrations — in under 15 minutes.\n\nNo code. No engineers required. No more broken workflows.",
-                    chars: 297
-                },
-                {
-                    title: "Stop wasting time on repetitive tasks!",
-                    body: "DataSync Pro automate your workflows seamlessly. Connect 200+ tools effortlessly.\n\nEfficiency at your fingertips.",
-                    chars: 150
-                }
-            ],
-            Instagram: [
-                {
-                    title: "Automate your life with DataSync Pro!",
-                    body: "Visual integration at its best. 200+ tools connected. #Automation #Tech",
-                    chars: 100
-                },
-                {
-                    title: "Workflow simplified.",
-                    body: "Click, connect, and relax. DataSync Pro does the rest.",
-                    chars: 80
-                }
-            ]
-        });
-        setStep(3);
+    const handleGenerate = async () => {
+        if (!formData.productName || !formData.description || formData.platforms.length === 0) {
+            alert("Please fill in Product Name, Description, and select at least one platform.");
+            return;
+        }
+
+        setIsLoading(true);
+        const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+        const results = {};
+
+        try {
+            for (const platform of formData.platforms) {
+                const prompt = `
+                    Generate 2 organic social media post captions for the following product:
+                    Brand: ${formData.brand}
+                    Product Name: ${formData.productName}
+                    Campaign Objective: ${formData.objective}
+                    Product Description: ${formData.description}
+                    Target Audience: ${formData.audience}
+                    Tone: ${formData.tone}
+                    Platform: ${platform}
+
+                    Requirements:
+                    1. The style must be an organic post type caption (engaging, relatable, value-driven) rather than a formal ad format.
+                    2. Provide TWO distinct variants.
+                    3. Return ONLY a JSON object with exactly this structure:
+                    {"variants": [{"title": "Short catchy hook/headline", "body": "Post caption content", "chars": length_of_body_number}]}
+                `;
+
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.3-70b-versatile",
+                        messages: [{ role: "user", content: prompt }],
+                        temperature: 0.7,
+                        response_format: { type: "json_object" }
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Groq API error for ${platform}`);
+
+                const data = await response.json();
+                const content = JSON.parse(data.choices[0].message.content);
+                results[platform] = content.variants;
+            }
+
+            setGeneratedCopy(results);
+            setActivePlatform(formData.platforms[0]);
+            setStep(2); // Jump to Copy Variants (new step 2)
+        } catch (error) {
+            console.error("Generation failed:", error);
+            alert("Failed to generate variants. Please check your API key and network.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const steps = [
         { id: 1, name: 'Product Input' },
-        { id: 2, name: 'Strategy' },
-        { id: 3, name: 'Copy Variants' },
-        { id: 4, name: 'Visual Studio' },
-        { id: 5, name: 'Review & Submit' }
+        { id: 2, name: 'Copy Variants' },
+        { id: 3, name: 'Visual Studio' },
+        { id: 4, name: 'Review & Submit' }
     ];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 text-left">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
@@ -69,7 +99,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-900 leading-none">Create Campaign</h2>
-                            <p className="text-xs text-slate-400 font-medium mt-1">Step {step} of 5 — {steps[step - 1].name}</p>
+                            <p className="text-xs text-slate-400 font-medium mt-1">Step {step} of 4 — {steps[step - 1].name}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
@@ -103,7 +133,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     {step === 1 && (
                         <div className="max-w-3xl mx-auto space-y-8">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-2">Product Input</h3>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2 font-black">Product Input</h3>
                                 <p className="text-sm text-slate-500">Tell our AI about your product. The more detail you provide, the better the output.</p>
                             </div>
 
@@ -188,8 +218,8 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                         {['LinkedIn', 'Instagram', 'Facebook'].map(p => (
                                             <label key={p} className="flex items-center gap-2 cursor-pointer group">
                                                 <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${formData.platforms.includes(p)
-                                                        ? 'bg-primary-600 border-primary-600 text-white'
-                                                        : 'border-slate-300 bg-white group-hover:border-primary-400'
+                                                    ? 'bg-primary-600 border-primary-600 text-white'
+                                                    : 'border-slate-300 bg-white group-hover:border-primary-400'
                                                     }`}>
                                                     {formData.platforms.includes(p) && <Check className="w-3 h-3" />}
                                                 </div>
@@ -211,11 +241,11 @@ const CampaignModal = ({ isOpen, onClose }) => {
                         </div>
                     )}
 
-                    {step === 3 && (
+                    {step === 2 && generatedCopy && (
                         <div className="max-w-5xl mx-auto space-y-6">
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 mb-1">Ad Copy Variants</h3>
-                                <p className="text-sm text-slate-500">Review and edit AI-generated copy for each platform.</p>
+                                <h3 className="text-lg font-bold text-slate-900 mb-1 font-black">Organic Post Variants</h3>
+                                <p className="text-sm text-slate-500">Review AI-generated organic captions for each platform.</p>
                             </div>
 
                             {/* Platform Tabs */}
@@ -250,18 +280,18 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                 ))}
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
                                 <div className="lg:col-span-2 space-y-6">
                                     <div className="space-y-4">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{activePlatform} Copy</label>
+                                            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">{activePlatform} Caption</label>
                                             <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                                                {generatedCopy[activePlatform][activeVariant - 1].chars} / 3,000 chars
+                                                {generatedCopy[activePlatform][activeVariant - 1]?.chars || 0} / 3,000 chars
                                             </span>
                                         </div>
                                         <div className="card p-6 min-h-[200px] border-slate-200">
-                                            <p className="text-sm font-bold text-slate-900 mb-4">{generatedCopy[activePlatform][activeVariant - 1].title}</p>
-                                            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{generatedCopy[activePlatform][activeVariant - 1].body}</p>
+                                            <p className="text-sm font-bold text-slate-900 mb-4">{generatedCopy[activePlatform][activeVariant - 1]?.title}</p>
+                                            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{generatedCopy[activePlatform][activeVariant - 1]?.body}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -277,8 +307,8 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                             </div>
                                         </div>
                                         <div className="space-y-3">
-                                            <p className="text-xs text-slate-800 line-clamp-3 font-semibold">{generatedCopy[activePlatform][activeVariant - 1].title}</p>
-                                            <p className="text-[11px] text-slate-600 line-clamp-4 leading-relaxed">{generatedCopy[activePlatform][activeVariant - 1].body}</p>
+                                            <p className="text-xs text-slate-800 line-clamp-3 font-semibold">{generatedCopy[activePlatform][activeVariant - 1]?.title}</p>
+                                            <p className="text-[11px] text-slate-600 line-clamp-4 leading-relaxed">{generatedCopy[activePlatform][activeVariant - 1]?.body}</p>
                                         </div>
                                         <div className="aspect-square bg-slate-100 rounded-lg flex items-center justify-center border border-slate-200 overflow-hidden relative group">
                                             <div className="absolute inset-0 bg-primary-600/5 group-hover:bg-transparent transition-colors" />
@@ -302,17 +332,27 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     </button>
 
                     <div className="flex items-center gap-2">
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className={`w-1.5 h-1.5 rounded-full transition-all ${step === i ? 'w-4 bg-primary-600' : 'bg-slate-200'}`} />
+                        {steps.map(s => (
+                            <div key={s.id} className={`w-1.5 h-1.5 rounded-full transition-all ${step === s.id ? 'w-4 bg-primary-600' : 'bg-slate-200'}`} />
                         ))}
                     </div>
 
                     <button
-                        onClick={step === 1 ? handleGenerate : () => step < 5 && setStep(step + 1)}
-                        className="flex items-center gap-2 px-8 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px]"
+                        disabled={isLoading}
+                        onClick={step === 1 ? handleGenerate : () => step < 4 && setStep(step + 1)}
+                        className={`flex items-center gap-2 px-8 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px] ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
                     >
-                        {step === 1 ? 'Generate Strategies' : step === 3 ? 'Continue to Visuals' : 'Next'}
-                        <ChevronRight className="w-4 h-4" />
+                        {isLoading ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                {step === 1 ? 'Generate Variants' : step === 2 ? 'Continue to Visuals' : 'Next'}
+                                <ChevronRight className="w-4 h-4" />
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
