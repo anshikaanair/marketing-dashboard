@@ -13,22 +13,27 @@ import {
     Layout
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { Link, useLocation } from 'react-router-dom';
 
-const SidebarItem = ({ icon: Icon, label, active = false, comingSoon = false }) => (
-    <button className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all group ${active
+const SidebarItem = ({ icon: Icon, label, href, active, comingSoon = false }) => (
+    <Link
+        to={href}
+        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all group ${active
             ? 'bg-primary-50 text-primary-600 font-semibold shadow-sm'
             : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-        }`}>
+            }`}
+    >
         <Icon className={`w-5 h-5 ${active ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
         <span className="text-sm flex-1 text-left">{label}</span>
         {comingSoon && (
             <span className="text-[10px] font-bold bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded uppercase">Soon</span>
         )}
-    </button>
+    </Link>
 );
 
 const Sidebar = () => {
     const { signOut, user } = useAuth();
+    const location = useLocation();
 
     return (
         <aside className="w-64 bg-white border-r border-slate-100 flex flex-col h-screen sticky top-0">
@@ -44,15 +49,25 @@ const Sidebar = () => {
                 </div>
 
                 <nav className="space-y-1">
-                    <SidebarItem icon={BarChart2} label="Dashboard" active />
-                    <SidebarItem icon={Megaphone} label="Campaigns" />
-                    <SidebarItem icon={CheckSquare} label="Approvals" />
-                    <SidebarItem icon={Calendar} label="Scheduler" />
-                    <SidebarItem icon={Layers} label="Brands" />
-                    <SidebarItem icon={Users} label="Social Accounts" />
-                    <SidebarItem icon={FileText} label="Audit Logs" />
-                    <SidebarItem icon={Users} label="Users" />
-                    <SidebarItem icon={Settings} label="Settings" />
+                    <SidebarItem
+                        icon={BarChart2}
+                        label="Dashboard"
+                        href="/"
+                        active={location.pathname === '/'}
+                    />
+                    <SidebarItem
+                        icon={Megaphone}
+                        label="Campaigns"
+                        href="/campaigns"
+                        active={location.pathname === '/campaigns'}
+                    />
+                    <SidebarItem icon={CheckSquare} label="Approvals" href="/approvals" active={location.pathname === '/approvals'} />
+                    <SidebarItem icon={Calendar} label="Scheduler" href="/scheduler" active={location.pathname === '/scheduler'} />
+                    <SidebarItem icon={Layers} label="Brands" href="/brands" active={location.pathname === '/brands'} />
+                    <SidebarItem icon={Users} label="Social Accounts" href="/social-accounts" active={location.pathname === '/social-accounts'} />
+                    <SidebarItem icon={FileText} label="Audit Logs" href="/audit-logs" active={location.pathname === '/audit-logs'} />
+                    <SidebarItem icon={Users} label="Users" href="/users" active={location.pathname === '/users'} />
+                    <SidebarItem icon={Settings} label="Settings" href="/settings" active={location.pathname === '/settings'} />
                 </nav>
             </div>
 
