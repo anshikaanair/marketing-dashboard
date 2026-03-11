@@ -9,9 +9,13 @@ from google import genai
 from dotenv import load_dotenv
 from pathlib import Path
 
+import json
+import tempfile
+
 # Load .env.local from the project root (one level up from backend/)
 dotenv_path = Path(__file__).resolve().parent.parent / ".env.local"
-load_dotenv(dotenv_path=dotenv_path)
+if dotenv_path.exists():
+    load_dotenv(dotenv_path=dotenv_path)
 
 app = FastAPI()
 
@@ -24,13 +28,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Google Auth Config — loaded from .env.local
-GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+# Google Auth Config
+GOOGLE_CREDS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "tenxds-agents-idp")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-if GOOGLE_APPLICATION_CREDENTIALS:
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_APPLICATION_CREDENTIALS
+if GOOGLE_CREDS:
+    # If it's a JSON string (common in Render/Vercel), write it to a temp file
+    if GOOGLE_CREDS.strip().startswith('{'):
+        try:
+            temp_creds_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode='w')
+            json.dump(json.loads(GOOGLE_CREDS), temp_creds_file)
+            temp_creds_file.close()
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_creds_file.name
+            print(f"Loaded credentials from JSON string (temp file: {temp_creds_file.name})")
+        except Exception as e:
+            print(f"Error parsing GOOGLE_APPLICATION_CREDENTIALS JSON: {e}")
+    else:
+        # It's already a file path
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_CREDS
+        print(f"Loaded credentials from path: {GOOGLE_CREDS}")
 
 client = genai.Client(
     vertexai=True,

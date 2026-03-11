@@ -156,7 +156,8 @@ const CampaignModal = ({ isOpen, onClose }) => {
             const variantIdx = activeVariant - 1;
             const copy = generatedCopy[platform][variantIdx];
 
-            const response = await fetch('http://localhost:8000/generate-image', {
+            const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+            const response = await fetch(`${apiBaseUrl}/generate-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -174,7 +175,11 @@ const CampaignModal = ({ isOpen, onClose }) => {
             setGeneratedImages(newImages);
         } catch (error) {
             console.error("Visual generation failed:", error);
-            alert("Failed to generate images. Make sure the backend is running at localhost:8000 (cd backend && uvicorn main:app --reload)");
+            const isLocal = window.location.hostname === 'localhost';
+            const message = isLocal
+                ? "Failed to generate images. Make sure the backend is running (cd backend && uvicorn main:app --reload)"
+                : "Failed to generate images. Please check if the backend service is running and VITE_API_BASE_URL is set correctly in Render.";
+            alert(message);
         } finally {
             setIsGeneratingImage(false);
         }
