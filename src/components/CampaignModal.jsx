@@ -1,28 +1,25 @@
 import React, { useState } from 'react';
-import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2, Image as ImageIcon, Sparkles, Send } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 const CampaignModal = ({ isOpen, onClose }) => {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-    const [formData, setFormData] = useState({
-        brand: '',
-        productName: '',
-        objective: '',
-        description: '',
-        audience: '',
-        tone: '',
-        platforms: []
-    });
-
+    const [formData, setFormData] = useState({ brand: '', productName: '', objective: '', description: '', audience: '', tone: '', platforms: [] });
     const [generatedCopy, setGeneratedCopy] = useState(null);
-    const [selectedVariants, setSelectedVariants] = useState({}); // { LinkedIn: 1, Instagram: 2 }
+    const [selectedVariants, setSelectedVariants] = useState({}); // { LinkedIn: [1, 2], Instagram: [1] }
     const [activePlatform, setActivePlatform] = useState('');
     const [activeVariant, setActiveVariant] = useState(1);
 
     // Visual Studio State
     const [selectedTemplate, setSelectedTemplate] = useState('Minimal');
     const [generatedImages, setGeneratedImages] = useState({}); // { LinkedIn: 'base64...' }
+    const [publishPlan, setPublishPlan] = useState('Schedule For Later');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const { user } = useAuth();
 
     if (!isOpen) return null;
 
@@ -92,34 +89,88 @@ const CampaignModal = ({ isOpen, onClose }) => {
         }
     };
 
+    const handleSubmit = async () => {
+        setIsSubmitting(true);
+        try {
+            if (!user) {
+                throw new Error("You must be logged in to submit a campaign.");
+            }
+
+            // 1. Insert Campaign
+            const { data: campaignData, error: campaignError } = await supabase
+                .from('campaigns')
+                .insert([{
+                    user_id: user.id,
+                    brand: formData.brand,
+                    product_name: formData.productName,
+                    objective: formData.objective,
+                    description: formData.description,
+                    audience: formData.audience,
+                    tone: formData.tone,
+                    platforms: formData.platforms,
+                    selected_variants: selectedVariants,
+                    generated_images: generatedImages,
+                    publish_plan: publishPlan,
+                    status: 'Pending Approval'
+                }])
+                .select();
+
+            if (campaignError) throw campaignError;
+            if (!campaignData || campaignData.length === 0) throw new Error("No data returned after campaign insertion.");
+
+            const campaign = campaignData[0];
+
+            // 2. Insert Activity
+            const { error: activityError } = await supabase
+                .from('activities')
+                .insert([{
+                    user_id: user.id,
+                    campaign_id: campaign.id,
+                    type: 'campaign_created',
+                    details: {
+                        product_name: formData.productName,
+                        brand: formData.brand
+                    }
+                }]);
+
+            if (activityError) throw activityError;
+
+            alert("Campaign submitted successfully!");
+            onClose();
+        } catch (error) {
+            console.error("Submission failed:", error);
+            // Provide more specific error message to help debugging
+            alert(`Failed to submit: ${error.message || 'Unknown error'}. Please ensure you have run the SQL setup in Supabase.`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const handleGenerateVisuals = async () => {
         setIsGeneratingImage(true);
         const newImages = { ...generatedImages };
 
         try {
-            // Only generate visuals for platforms that have a selected variant
-            const selectedPlatforms = Object.keys(selectedVariants);
+            // Focus generation on the currently active platform and variant in Step 3
+            const platform = activePlatform;
+            const variantIdx = activeVariant - 1;
+            const copy = generatedCopy[platform][variantIdx];
 
-            for (const platform of selectedPlatforms) {
-                const variantIdx = selectedVariants[platform] - 1;
-                const copy = generatedCopy[platform][variantIdx];
+            const response = await fetch('http://localhost:8000/generate-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    product_name: formData.productName,
+                    ad_copy: copy.body,
+                    brand_name: formData.brand || 'Your Brand',
+                    platform: platform,
+                    template: selectedTemplate
+                })
+            });
 
-                const response = await fetch('http://localhost:8000/generate-image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        product_name: formData.productName,
-                        ad_copy: copy.body,
-                        brand_name: formData.brand || 'Your Brand',
-                        platform: platform,
-                        template: selectedTemplate
-                    })
-                });
-
-                if (!response.ok) throw new Error(`Image API error for ${platform}`);
-                const data = await response.json();
-                newImages[platform] = `data:${data.mime_type};base64,${data.image}`;
-            }
+            if (!response.ok) throw new Error(`Image API error for ${platform}`);
+            const data = await response.json();
+            newImages[platform] = `data:${data.mime_type};base64,${data.image}`;
             setGeneratedImages(newImages);
         } catch (error) {
             console.error("Visual generation failed:", error);
@@ -315,30 +366,38 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                         {p === 'Instagram' && <Instagram className="w-4 h-4" />}
                                         {p === 'Facebook' && <Facebook className="w-4 h-4" />}
                                         {p}
-                                        {selectedVariants[p] && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full ml-1" />}
+                                        {selectedVariants[p]?.length > 0 && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full ml-1" />}
                                         {activePlatform === p && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-600 rounded-full" />}
                                     </button>
                                 ))}
                             </div>
 
-                            {/* Variant Selection Tabs */}
                             <div className="flex items-center gap-2">
-                                {[1, 2].map(v => (
-                                    <button
-                                        key={v}
-                                        onClick={() => {
-                                            setActiveVariant(v);
-                                            setSelectedVariants({ ...selectedVariants, [activePlatform]: v });
-                                        }}
-                                        className={`px-6 py-2 text-sm font-bold rounded-xl transition-all border ${selectedVariants[activePlatform] === v
-                                            ? 'bg-primary-50 border-primary-600 text-primary-600 shadow-sm'
-                                            : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'
-                                            }`}
-                                    >
-                                        Variant {v}
-                                        {selectedVariants[activePlatform] === v && <Check className="w-3 h-3 inline ml-2" />}
-                                    </button>
-                                ))}
+                                {[1, 2].map(v => {
+                                    const isSelected = selectedVariants[activePlatform]?.includes(v);
+                                    return (
+                                        <button
+                                            key={v}
+                                            onClick={() => {
+                                                setActiveVariant(v);
+                                                setSelectedVariants(prev => {
+                                                    const current = prev[activePlatform] || [];
+                                                    const next = current.includes(v)
+                                                        ? current.filter(id => id !== v)
+                                                        : [...current, v];
+                                                    return { ...prev, [activePlatform]: next };
+                                                });
+                                            }}
+                                            className={`px-6 py-2 text-sm font-bold rounded-xl transition-all border ${isSelected
+                                                ? 'bg-primary-50 border-primary-600 text-primary-600 shadow-sm'
+                                                : 'bg-white border-slate-200 text-slate-500 hover:border-primary-400'
+                                                }`}
+                                        >
+                                            Variant {v}
+                                            {isSelected && <Check className="w-3 h-3 inline ml-2" />}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
@@ -355,26 +414,25 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 <p className="text-sm font-bold text-slate-900">{generatedCopy[activePlatform][activeVariant - 1]?.title}</p>
                                                 <button
                                                     onClick={() => {
-                                                        const currentSelection = selectedVariants[activePlatform];
-                                                        if (currentSelection === activeVariant) {
-                                                            const newSelections = { ...selectedVariants };
-                                                            delete newSelections[activePlatform];
-                                                            setSelectedVariants(newSelections);
-                                                        } else {
-                                                            setSelectedVariants({ ...selectedVariants, [activePlatform]: activeVariant });
-                                                        }
+                                                        setSelectedVariants(prev => {
+                                                            const current = prev[activePlatform] || [];
+                                                            const next = current.includes(activeVariant)
+                                                                ? current.filter(id => id !== activeVariant)
+                                                                : [...current, activeVariant];
+                                                            return { ...prev, [activePlatform]: next };
+                                                        });
                                                     }}
-                                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${selectedVariants[activePlatform] === activeVariant
+                                                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${selectedVariants[activePlatform]?.includes(activeVariant)
                                                         ? 'bg-primary-600 text-white shadow-lg shadow-primary-200'
                                                         : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                                                         }`}
                                                 >
-                                                    <Check className={`w-6 h-6 ${selectedVariants[activePlatform] === activeVariant ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
+                                                    <Check className={`w-6 h-6 ${selectedVariants[activePlatform]?.includes(activeVariant) ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
                                                 </button>
                                             </div>
                                             <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">{generatedCopy[activePlatform][activeVariant - 1]?.body}</p>
 
-                                            {selectedVariants[activePlatform] === activeVariant && (
+                                            {selectedVariants[activePlatform]?.includes(activeVariant) && (
                                                 <div className="absolute top-0 left-0 w-1 h-full bg-primary-600 rounded-l-xl" />
                                             )}
                                         </div>
@@ -441,19 +499,43 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                         <select
                                             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary-100"
                                             value={activePlatform}
-                                            onChange={(e) => setActivePlatform(e.target.value)}
+                                            onChange={(e) => {
+                                                const platform = e.target.value;
+                                                setActivePlatform(platform);
+                                                // Default to the first selected variant for this platform if available
+                                                const selected = selectedVariants[platform];
+                                                if (selected && selected.length > 0) {
+                                                    setActiveVariant(selected[0]);
+                                                }
+                                            }}
                                         >
-                                            {Object.keys(selectedVariants).map(p => <option key={p} value={p}>{p}</option>)}
+                                            {// Only show platforms that have at least one selected variant
+                                                Object.keys(selectedVariants).filter(p => selectedVariants[p]?.length > 0).map(p => <option key={p} value={p}>{p}</option>)
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Selected Variant</label>
+                                        <select
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary-100"
+                                            value={activeVariant}
+                                            onChange={(e) => setActiveVariant(Number(e.target.value))}
+                                        >
+                                            {/* Only show variants that the user selected for this platform */}
+                                            {selectedVariants[activePlatform]?.map((vId) => (
+                                                <option key={vId} value={vId}>{generatedCopy[activePlatform][vId - 1]?.title}</option>
+                                            ))}
                                         </select>
                                     </div>
 
                                     <button
                                         onClick={handleGenerateVisuals}
-                                        disabled={isGeneratingImage || Object.keys(selectedVariants).length === 0}
+                                        disabled={isGeneratingImage || !Object.values(selectedVariants).some(v => v?.length > 0)}
                                         className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70"
                                     >
                                         {isGeneratingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                                        {isGeneratingImage ? "Designing Artwork..." : Object.keys(selectedVariants).length === 0 ? "Select a Variant First" : "Generate AI Visuals"}
+                                        {isGeneratingImage ? "Designing Artwork..." : !Object.values(selectedVariants).some(v => v?.length > 0) ? "Select a Variant First" : "Generate AI Visuals"}
                                     </button>
                                 </div>
 
@@ -517,6 +599,126 @@ const CampaignModal = ({ isOpen, onClose }) => {
                             </div>
                         </div>
                     )}
+
+                    {step === 4 && (
+                        <div className="max-w-5xl mx-auto space-y-8">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900 mb-1 font-black">Review & Submit</h3>
+                                <p className="text-sm text-slate-500">Review your campaign before submitting for approval.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div className="space-y-8">
+                                    {/* Campaign Details Card */}
+                                    <div className="card p-6 border-slate-100 shadow-sm space-y-6">
+                                        <h4 className="text-sm font-bold text-slate-900">Campaign Details</h4>
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Product</span>
+                                                <span className="col-span-2 text-sm font-black text-slate-900">{formData.productName}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Brand</span>
+                                                <span className="col-span-2 text-sm font-bold text-slate-800">{formData.brand}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Objective</span>
+                                                <span className="col-span-2 text-sm font-bold text-slate-800">{formData.objective}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tone</span>
+                                                <span className="col-span-2 text-sm font-bold text-slate-800">{formData.tone}</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Platforms</span>
+                                                <div className="col-span-2 flex flex-wrap gap-2">
+                                                    {formData.platforms.map(p => (
+                                                        <span key={p} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${p === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                            p === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                                                'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                                            }`}>
+                                                            {p}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Copy Variants Summary Card */}
+                                    <div className="card p-6 border-slate-100 shadow-sm space-y-6">
+                                        <div className="flex justify-between items-center">
+                                            <h4 className="text-sm font-bold text-slate-900">Selected Variants</h4>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {Object.keys(selectedVariants).filter(p => selectedVariants[p]?.length > 0).map(platform => (
+                                                <div key={platform} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${platform === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                        platform === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                                            'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                                        }`}>
+                                                        {platform}
+                                                    </span>
+                                                    <span className="text-xs font-bold text-slate-500">{selectedVariants[platform].length} variant(s) selected</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-8">
+                                    {/* Publish Plan Card */}
+                                    <div className="card p-6 border-slate-100 shadow-sm space-y-6">
+                                        <h4 className="text-sm font-bold text-slate-900">Publish Plan</h4>
+                                        <div className="space-y-3">
+                                            {[
+                                                'Schedule For Later',
+                                                'Publish Immediately After Approval'
+                                            ].map(plan => (
+                                                <label
+                                                    key={plan}
+                                                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer ${publishPlan === plan ? 'border-primary-600 ring-1 ring-primary-100' : 'border-slate-100 hover:border-slate-200'
+                                                        }`}
+                                                >
+                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${publishPlan === plan ? 'border-primary-600' : 'border-slate-200'
+                                                        }`}>
+                                                        <div className={`w-2.5 h-2.5 rounded-full transition-all ${publishPlan === plan ? 'bg-primary-600 scale-100' : 'bg-transparent scale-0'
+                                                            }`} />
+                                                    </div>
+                                                    <input
+                                                        type="radio"
+                                                        name="publishPlan"
+                                                        className="hidden"
+                                                        checked={publishPlan === plan}
+                                                        onChange={() => setPublishPlan(plan)}
+                                                    />
+                                                    <span className={`text-sm font-bold ${publishPlan === plan ? 'text-slate-900' : 'text-slate-600'}`}>
+                                                        {plan}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Final Submit Banner */}
+                            <div className="card p-6 border-primary-100 bg-primary-50/50 flex flex-col md:flex-row items-center justify-between gap-6 border-2">
+                                <div className="text-left">
+                                    <h4 className="text-sm font-bold text-slate-900">Ready to submit for approval?</h4>
+                                    <p className="text-xs text-slate-500 font-medium mt-1">This campaign will be sent to Brand Admins for review.</p>
+                                </div>
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={isSubmitting}
+                                    className="px-8 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-70"
+                                >
+                                    {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                    {isSubmitting ? "Submitting..." : "Submit for Approval"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -536,20 +738,23 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     </div>
 
                     <button
-                        disabled={isLoading || isGeneratingImage || (step === 2 && Object.keys(selectedVariants).length === 0)}
+                        disabled={isLoading || isGeneratingImage || isSubmitting || (step === 2 && !Object.values(selectedVariants).some(v => v?.length > 0))}
                         onClick={() => {
                             if (step === 1) handleGenerate();
                             else if (step === 2) {
-                                // Ensure only selected platforms are shown in next step
-                                const selected = Object.keys(selectedVariants);
-                                if (selected.length > 0) {
-                                    setActivePlatform(selected[0]);
+                                // Ensure only platforms with selected variants are shown in next step
+                                const selectedPlatforms = Object.keys(selectedVariants).filter(p => selectedVariants[p]?.length > 0);
+                                if (selectedPlatforms.length > 0) {
+                                    const firstPlatform = selectedPlatforms[0];
+                                    setActivePlatform(firstPlatform);
+                                    setActiveVariant(selectedVariants[firstPlatform][0]);
                                     setStep(3);
                                 }
                             }
-                            else if (step < 4) setStep(step + 1);
+                            else if (step === 3) setStep(4);
+                            else if (step === 4) handleSubmit();
                         }}
-                        className={`flex items-center gap-2 px-8 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px] ${isLoading || isGeneratingImage || (step === 2 && Object.keys(selectedVariants).length === 0) ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        className={`flex items-center gap-2 px-8 py-2.5 bg-primary-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px] ${isLoading || isGeneratingImage || isSubmitting || (step === 2 && !Object.values(selectedVariants).some(v => v?.length > 0)) ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
                         {isLoading ? (
                             <>
@@ -561,9 +766,14 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                 <Loader2 className="w-4 h-4 animate-spin" />
                                 Designing...
                             </>
+                        ) : isSubmitting ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Submitting...
+                            </>
                         ) : (
                             <>
-                                {step === 1 ? 'Generate Variants' : step === 3 ? 'Review Campaign' : 'Continue to Visuals'}
+                                {step === 1 ? 'Generate Variants' : step === 3 ? 'Review Campaign' : step === 4 ? 'Submit Project' : 'Continue to Visuals'}
                                 <ChevronRight className="w-4 h-4" />
                             </>
                         )}

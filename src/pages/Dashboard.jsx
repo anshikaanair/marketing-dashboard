@@ -1,6 +1,7 @@
-import React from 'react';
-import { Megaphone, Clock, Calendar, AlertCircle, ArrowUpRight, Play, CheckSquare, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Megaphone, Clock, Calendar, AlertCircle, ArrowUpRight, Play, CheckSquare, Plus, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import CampaignModal from '../components/CampaignModal';
 
 const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend }) => (
@@ -22,7 +23,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend }) => (
     </div>
 );
 
-const ActivityItem = ({ title, time, type }) => (
+const ActivityItem = ({ title, time, type, status }) => (
     <div className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors cursor-pointer rounded-lg border border-transparent hover:border-slate-100">
         <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
             {type === 'campaign' ? <Megaphone className="w-5 h-5 text-slate-400" /> : <Play className="w-5 h-5 text-slate-400" />}
@@ -31,17 +32,73 @@ const ActivityItem = ({ title, time, type }) => (
             <p className="text-sm font-semibold text-slate-900 truncate">{title}</p>
             <p className="text-xs text-slate-400">{time}</p>
         </div>
-        <span className="text-[10px] font-bold bg-orange-50 text-orange-600 px-2 py-1 rounded-full border border-orange-100">Pending Approval</span>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-orange-50 text-orange-600 border-orange-100'
+            }`}>
+            {status}
+        </span>
     </div>
 );
 
 const Dashboard = () => {
     const { user } = useAuth();
-    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [campaigns, setCampaigns] = useState([]);
+    const [activities, setActivities] = useState([]);
+    const [loading, setLoading] = useState(true);
     const userName = user?.email?.split('@')[0] || 'there';
 
+    useEffect(() => {
+        if (user) {
+            fetchDashboardData();
+        }
+    }, [user]);
+
+    const fetchDashboardData = async () => {
+        setLoading(true);
+        try {
+            console.log("Fetching dashboard data...");
+            // Fetch Recent Campaigns
+            const { data: campaignsData, error: campaignsError } = await supabase
+                .from('campaigns')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (campaignsError) {
+                console.error("Supabase Error (campaigns):", campaignsError);
+                throw campaignsError;
+            }
+
+            // Fetch Activity Feed
+            const { data: activitiesData, error: activitiesError } = await supabase
+                .from('activities')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(5);
+
+            if (activitiesError) {
+                console.error("Supabase Error (activities):", activitiesError);
+                throw activitiesError;
+            }
+
+            console.log("Successfully fetched campaigns:", campaignsData?.length);
+            setCampaigns(campaignsData || []);
+            setActivities(activitiesData || []);
+        } catch (error) {
+            console.error("Failed to fetch dashboard data:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const stats = {
+        total: campaigns.length,
+        pending: campaigns.filter(c => c.status === 'Pending Approval').length,
+        scheduled: 0,
+        failed: 0
+    };
+
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8">
+        <div className="p-8 max-w-7xl mx-auto space-y-8 text-left">
             <div className="flex justify-between items-end">
                 <div>
                     <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Dashboard</h2>
@@ -59,29 +116,29 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     title="Campaigns (30d)"
-                    value="5"
-                    subtext="+2 from last month"
+                    value={stats.total}
+                    subtext="+0 from last month"
                     icon={Megaphone}
                     colorClass="bg-primary-600"
-                    trend="40%"
+                    trend="0%"
                 />
                 <StatCard
                     title="Pending Approvals"
-                    value="2"
+                    value={stats.pending}
                     subtext="Needs your review"
                     icon={Clock}
                     colorClass="bg-amber-500"
                 />
                 <StatCard
                     title="Scheduled (7d)"
-                    value="5"
+                    value={stats.scheduled}
                     subtext="Across all platforms"
                     icon={Calendar}
                     colorClass="bg-sky-500"
                 />
                 <StatCard
                     title="Failed Publishes"
-                    value="1"
+                    value={stats.failed}
                     subtext="Need retry"
                     icon={AlertCircle}
                     colorClass="bg-rose-500"
@@ -94,38 +151,75 @@ const Dashboard = () => {
                         <h3 className="text-lg font-bold text-slate-900">Recent Campaigns</h3>
                         <button className="text-sm font-semibold text-primary-600 hover:text-primary-700">View all</button>
                     </div>
-                    <div className="card p-0 overflow-hidden divide-y divide-slate-50">
-                        <ActivityItem title="Q1 Product Launch — DataSync Pro" time="Acme Corp • Emily Rodriguez • Mar 4" type="campaign" />
-                        <ActivityItem title="Spring Brand Awareness — ToolFlow AI" time="Spring 2026 • Alex Chen • Mar 2" type="campaign" />
-                        <ActivityItem title="User Testimonials — Social Push" time="General • Sarah Johnson • Feb 28" type="campaign" />
+                    <div className="card p-0 overflow-hidden divide-y divide-slate-50 min-h-[100px]">
+                        {loading ? (
+                            <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
+                                <Loader2 className="w-8 h-8 animate-spin" />
+                                <p className="text-xs font-bold uppercase tracking-widest">Loading Campaigns...</p>
+                            </div>
+                        ) : campaigns.length > 0 ? (
+                            campaigns.slice(0, 3).map(c => (
+                                <ActivityItem
+                                    key={c.id}
+                                    title={`${c.product_name} — ${c.objective}`}
+                                    time={`${c.brand} • ${new Date(c.created_at).toLocaleDateString()}`}
+                                    type="campaign"
+                                    status={c.status}
+                                />
+                            ))
+                        ) : (
+                            <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-300">
+                                <Megaphone className="w-12 h-12" />
+                                <p className="text-xs font-bold uppercase tracking-widest text-center">
+                                    No Recent Campaigns<br />
+                                    <span className="text-[10px] lowercase font-normal">Check console for connection issues</span>
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="space-y-4">
                     <h3 className="text-lg font-bold text-slate-900">Activity Feed</h3>
-                    <div className="card p-4 space-y-6">
-                        <div className="flex gap-4">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
-                                <Megaphone className="w-4 h-4 text-indigo-600" />
+                    <div className="card p-4 space-y-6 min-h-[100px]">
+                        {loading ? (
+                            <div className="py-8 flex flex-col items-center gap-3 text-slate-400">
+                                <Loader2 className="w-6 h-6 animate-spin" />
                             </div>
-                            <div>
-                                <p className="text-xs text-slate-800"><span className="font-bold">Emily Rodriguez</span> campaign created on <span className="text-primary-600 font-semibold cursor-pointer">Q1 Product Launch</span></p>
-                                <p className="text-[10px] text-slate-400 mt-1">Feb 28, 03:30 PM</p>
+                        ) : activities.length > 0 ? (
+                            activities.map(a => (
+                                <div key={a.id} className="flex gap-4">
+                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${a.type === 'campaign_created' ? 'bg-indigo-50' : 'bg-emerald-50'
+                                        }`}>
+                                        {a.type === 'campaign_created' ? (
+                                            <Megaphone className="w-4 h-4 text-indigo-600" />
+                                        ) : (
+                                            <CheckSquare className="w-4 h-4 text-emerald-600" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-slate-800 line-clamp-2">
+                                            <span className="font-bold">{userName}</span>{' '}
+                                            {a.type === 'campaign_created' ? 'created' : 'approved'} campaign{' '}
+                                            <span className="text-primary-600 font-semibold cursor-pointer">
+                                                {a.details?.product_name}
+                                            </span>
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 mt-1">
+                                            {new Date(a.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="py-8 text-center">
+                                <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">No Activity Yet</p>
                             </div>
-                        </div>
-                        <div className="flex gap-4">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                                <CheckSquare className="w-4 h-4 text-emerald-600" />
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-800"><span className="font-bold">System</span> approved campaign <span className="text-primary-600 font-semibold cursor-pointer">Global Reach v2</span></p>
-                                <p className="text-[10px] text-slate-400 mt-1">Feb 27, 09:12 AM</p>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
-            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+            <CampaignModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); fetchDashboardData(); }} />
         </div>
     );
 };
