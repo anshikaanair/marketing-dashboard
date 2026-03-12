@@ -108,6 +108,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     audience: formData.audience,
                     tone: formData.tone,
                     platforms: formData.platforms,
+                    generated_copy: generatedCopy,
                     selected_variants: selectedVariants,
                     generated_images: generatedImages,
                     publish_plan: publishPlan,
