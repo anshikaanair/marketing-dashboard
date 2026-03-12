@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2, Image as ImageIcon, Sparkles, Send } from 'lucide-react';
+import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2, Image as ImageIcon, Sparkles, Send, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,7 +15,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
     // Visual Studio State
     const [selectedTemplate, setSelectedTemplate] = useState('Minimal');
-    const [generatedImages, setGeneratedImages] = useState({}); // { LinkedIn: 'base64...' }
+    const [generatedImages, setGeneratedImages] = useState({}); // { 'LinkedIn-0': 'base64...' }
     const [publishPlan, setPublishPlan] = useState('Schedule For Later');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -155,6 +155,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
             const platform = activePlatform;
             const variantIdx = activeVariant - 1;
             const copy = generatedCopy[platform][variantIdx];
+            const imageKey = `${platform}-${variantIdx}`;
 
             const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
             const response = await fetch(`${apiBaseUrl}/generate-image`, {
@@ -171,7 +172,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
             if (!response.ok) throw new Error(`Image API error for ${platform}`);
             const data = await response.json();
-            newImages[platform] = `data:${data.mime_type};base64,${data.image}`;
+            newImages[imageKey] = `data:${data.mime_type};base64,${data.image}`;
             setGeneratedImages(newImages);
         } catch (error) {
             console.error("Visual generation failed:", error);
@@ -183,6 +184,15 @@ const CampaignModal = ({ isOpen, onClose }) => {
         } finally {
             setIsGeneratingImage(false);
         }
+    };
+
+    const handleDownload = (imageBase64, filename) => {
+        const link = document.createElement('a');
+        link.href = imageBase64;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const steps = [
@@ -555,10 +565,20 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
                                     <div className="grid grid-cols-2 gap-6">
                                         {/* Square Preview */}
-                                        <div className="space-y-2">
+                                        <div className="space-y-4">
                                             <div className="aspect-square rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden relative group">
-                                                {generatedImages[activePlatform] ? (
-                                                    <img src={generatedImages[activePlatform]} className="w-full h-full object-cover" alt="Square Preview" />
+                                                {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                    <>
+                                                        <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
+                                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
+                                                                className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                            >
+                                                                <Download className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </>
                                                 ) : (
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
                                                         <ImageIcon className="w-12 h-12 text-slate-400" />
@@ -567,7 +587,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 )}
                                                 <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white">
                                                     <p className="text-[10px] font-black text-slate-900 leading-tight line-clamp-2">
-                                                        {generatedCopy[activePlatform][(selectedVariants[activePlatform] || 1) - 1]?.title}
+                                                        {generatedCopy[activePlatform][activeVariant - 1]?.title}
                                                     </p>
                                                     <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-lg">Learn More</button>
                                                 </div>
@@ -578,8 +598,18 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                         {/* Landscape Preview */}
                                         <div className="space-y-6 flex flex-col justify-between">
                                             <div className="aspect-video rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden relative group">
-                                                {generatedImages[activePlatform] ? (
-                                                    <img src={generatedImages[activePlatform]} className="w-full h-full object-cover" alt="Landscape Preview" />
+                                                {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                    <>
+                                                        <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
+                                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`)}
+                                                                className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                            >
+                                                                <Download className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </>
                                                 ) : (
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
                                                         <ImageIcon className="w-12 h-12 text-slate-400" />
@@ -588,7 +618,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 )}
                                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/50 to-transparent p-4">
                                                     <p className="text-xs font-bold text-white line-clamp-1">
-                                                        {generatedCopy[activePlatform][(selectedVariants[activePlatform] || 1) - 1]?.title}
+                                                        {generatedCopy[activePlatform][activeVariant - 1]?.title}
                                                     </p>
                                                 </div>
                                             </div>
@@ -596,7 +626,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
                                             <div className="card p-4 border-slate-100 bg-slate-50/50">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selected Hook</p>
-                                                <p className="text-xs font-bold text-slate-800 italic">"{generatedCopy[activePlatform][(selectedVariants[activePlatform] || 1) - 1]?.title}"</p>
+                                                <p className="text-xs font-bold text-slate-800 italic">"{generatedCopy[activePlatform][activeVariant - 1]?.title}"</p>
                                             </div>
                                         </div>
                                     </div>
