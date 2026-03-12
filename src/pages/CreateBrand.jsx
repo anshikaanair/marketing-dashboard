@@ -24,7 +24,10 @@ const CreateBrand = () => {
         typography: {
             primary: 'Inter',
             secondary: 'Poppins'
-        }
+        },
+        tone: 'Professional',
+        cta_style: 'Try for Free',
+        target_audience: ''
     });
 
     const industries = [
@@ -42,6 +45,16 @@ const CreateBrand = () => {
         { label: 'Teal', primary: '#14B8A6', secondary: '#0F766E', background: '#F0FDFA' },
     ];
 
+    const tonePresets = [
+        'Professional', 'Innovative', 'Casual', 'Inspiring',
+        'Friendly', 'Authoritative', 'Playful', 'Bold'
+    ];
+
+    const ctaStyles = [
+        'Learn More', 'Get Started', 'Discover More', 'Try for Free',
+        'Book a Demo', 'Shop Now', 'Sign Up', 'Request Access'
+    ];
+
     const handleSubmit = async () => {
         setIsLoading(true);
         try {
@@ -55,7 +68,10 @@ const CreateBrand = () => {
                     description: brandData.description,
                     colors: brandData.colors,
                     typography: brandData.typography,
-                    logo_url: brandData.logo // For now storing as string/placeholder
+                    logo_url: brandData.logo, // For now storing as string/placeholder
+                    tone: brandData.tone,
+                    cta_style: brandData.cta_style,
+                    target_audience: brandData.target_audience
                 }]);
 
             if (error) throw error;
@@ -85,12 +101,11 @@ const CreateBrand = () => {
         { id: 1, label: 'Brand Identity', icon: Megaphone },
         { id: 2, label: 'Visual Identity', icon: Palette },
         { id: 3, label: 'Brand Voice', icon: MessageSquare },
-        { id: 4, label: 'Guidelines', icon: ShieldCheck },
-        { id: 5, label: 'Review', icon: Save }
+        { id: 4, label: 'Review', icon: ShieldCheck }
     ];
 
     const renderStepHeader = () => (
-        <div className="space-y-6">
+        <div className="space-y-6 text-left">
             <div className="flex items-center gap-4">
                 <Link to="/brands" className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors border border-slate-100">
                     <ArrowLeft className="w-5 h-5 text-slate-600" />
@@ -125,14 +140,14 @@ const CreateBrand = () => {
     );
 
     const renderBrandIdentity = () => (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
             <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600">
                     <Megaphone className="w-5 h-5" />
                 </div>
                 <div>
                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Brand Identity</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 5</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 4</p>
                 </div>
             </div>
 
@@ -208,14 +223,14 @@ const CreateBrand = () => {
     );
 
     const renderVisualIdentity = () => (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
             <div className="flex items-center gap-4 mb-4">
                 <div className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600">
                     <Palette className="w-5 h-5" />
                 </div>
                 <div>
                     <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Visual Identity</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 5</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 4</p>
                 </div>
             </div>
 
@@ -260,13 +275,14 @@ const CreateBrand = () => {
                             <button
                                 key={preset.label}
                                 onClick={() => setBrandData({ ...brandData, colors: { primary: preset.primary, secondary: preset.secondary, background: preset.background } })}
-                                className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-100 rounded-lg hover:border-primary-200 transition-all group"
+                                className={`flex items-center gap-2 px-3 py-2 bg-white border rounded-lg transition-all group ${brandData.colors.primary === preset.primary ? 'border-primary-600 ring-2 ring-primary-50' : 'border-slate-100 hover:border-primary-200'
+                                    }`}
                             >
                                 <div className="flex -space-x-1.5">
                                     <div className="w-4 h-4 rounded-full border border-white" style={{ backgroundColor: preset.primary }} />
                                     <div className="w-4 h-4 rounded-full border border-white" style={{ backgroundColor: preset.background }} />
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{preset.label}</span>
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${brandData.colors.primary === preset.primary ? 'text-primary-700' : 'text-slate-600'}`}>{preset.label}</span>
                             </button>
                         ))}
                     </div>
@@ -339,20 +355,217 @@ const CreateBrand = () => {
                     <ArrowLeft className="w-4 h-4" />
                     Back
                 </button>
-                <div className="flex gap-4">
+                <button
+                    onClick={() => setStep(3)}
+                    className="flex items-center gap-2 px-8 py-3.5 bg-primary-600 text-white font-black rounded-2xl shadow-xl shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-2px] active:translate-y-[0px] uppercase tracking-widest text-xs"
+                >
+                    Continue
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+
+    const renderBrandVoice = () => (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
+            <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600">
+                    <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Brand Voice</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 4</p>
+                </div>
+            </div>
+
+            <div className="card p-8 border-slate-100 shadow-sm space-y-10 bg-white">
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Brand Tone <span className="text-rose-500">*</span>
+                    </label>
+                    <p className="text-xs text-slate-400 font-medium -mt-2">Select the voice and personality of your brand</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {tonePresets.map(tone => (
+                            <button
+                                key={tone}
+                                onClick={() => setBrandData({ ...brandData, tone })}
+                                className={`px-4 py-3 rounded-xl text-sm font-bold transition-all border ${brandData.tone === tone
+                                    ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-100'
+                                    : 'bg-white text-slate-600 border-slate-100 hover:border-primary-200'
+                                    }`}
+                            >
+                                {tone}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Default CTA Style <span className="text-rose-500">*</span>
+                    </label>
+                    <p className="text-xs text-slate-400 font-medium -mt-2">The primary call-to-action used in campaigns</p>
+                    <div className="flex flex-wrap gap-3">
+                        {ctaStyles.map(cta => (
+                            <button
+                                key={cta}
+                                onClick={() => setBrandData({ ...brandData, cta_style: cta })}
+                                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${brandData.cta_style === cta
+                                    ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-100'
+                                    : 'bg-slate-50 text-slate-600 border-slate-100 hover:border-primary-200'
+                                    }`}
+                            >
+                                {cta}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Target Audience</label>
+                    <textarea
+                        rows={4}
+                        value={brandData.target_audience}
+                        onChange={(e) => setBrandData({ ...brandData, target_audience: e.target.value })}
+                        placeholder="e.g. CTOs and engineering leaders at mid-market SaaS companies (200-2000 employees)"
+                        className="w-full px-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all outline-none resize-none"
+                    />
+                </div>
+            </div>
+
+            <div className="flex justify-between pt-4">
+                <button
+                    onClick={() => setStep(2)}
+                    className="flex items-center gap-2 px-8 py-3.5 bg-white border border-slate-200 text-slate-600 font-black rounded-2xl hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                </button>
+                <button
+                    onClick={() => setStep(4)}
+                    className="flex items-center gap-2 px-8 py-3.5 bg-primary-600 text-white font-black rounded-2xl shadow-xl shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-2px] active:translate-y-[0px] uppercase tracking-widest text-xs"
+                >
+                    Continue
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+
+    const renderReview = () => (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 text-left">
+            <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600">
+                    <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Review</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Step {step} of 4</p>
+                </div>
+            </div>
+
+            <div className="p-6 bg-primary-50/50 border border-primary-100 rounded-2xl flex items-start gap-4">
+                <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-primary-600 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                </div>
+                <p className="text-sm font-medium text-slate-600 leading-relaxed pt-2">
+                    Review your brand configuration below. Click <span className="font-black text-slate-900">Create Brand</span> to save and start using this brand in your campaigns.
+                </p>
+            </div>
+
+            <div className="space-y-6">
+                {/* Brand Identity Review */}
+                <div className="rounded-3xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                    <div className="px-6 py-3 bg-slate-50/50 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Identity</span>
+                    </div>
+                    <div className="p-6 flex items-start gap-6">
+                        <div className="w-16 h-16 bg-primary-600 rounded-2xl flex items-center justify-center text-white text-xl font-black shadow-lg shadow-primary-100 uppercase shrink-0">
+                            {brandData.logo ? <img src={brandData.logo} className="w-full h-full object-contain rounded-2xl" /> : brandData.name.slice(0, 2)}
+                        </div>
+                        <div className="space-y-1">
+                            <h4 className="text-xl font-black text-slate-900">{brandData.name}</h4>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{brandData.industry} • {brandData.tagline || 'No tagline'}</p>
+                            <p className="text-sm text-slate-500 font-medium line-clamp-2 mt-2">{brandData.description || 'No description provided'}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Visual Identity Review */}
+                <div className="rounded-3xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                    <div className="px-6 py-3 bg-slate-50/50 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visual Identity</span>
+                    </div>
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-4">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Colors</span>
+                            <div className="space-y-3">
+                                {Object.entries(brandData.colors).map(([key, val]) => (
+                                    <div key={key} className="flex items-center gap-3">
+                                        <div className="w-6 h-6 rounded-lg shadow-sm border border-slate-100" style={{ backgroundColor: val }} />
+                                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">{val}</span>
+                                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">• {key}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Fonts</span>
+                            <div className="space-y-3">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-black text-slate-900">{brandData.typography.primary}</span>
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Primary</span>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-black text-slate-900">{brandData.typography.secondary}</span>
+                                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Secondary</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Brand Voice Review */}
+                <div className="rounded-3xl border border-slate-100 overflow-hidden bg-white shadow-sm">
+                    <div className="px-6 py-3 bg-slate-50/50 border-b border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Voice</span>
+                    </div>
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Tone Preset</span>
+                            <span className="text-sm font-black text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg">{brandData.tone}</span>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Default CTA</span>
+                            <span className="text-sm font-black text-slate-900">{brandData.cta_style}</span>
+                        </div>
+                        <div className="col-span-full space-y-2 mt-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Target Audience</span>
+                            <p className="text-sm text-slate-600 font-medium leading-relaxed">{brandData.target_audience || 'No specific audience defined'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-between pt-8 items-center border-t border-slate-100">
+                <button
+                    onClick={() => setStep(3)}
+                    className="flex items-center gap-2 px-8 py-3.5 bg-white border border-slate-200 text-slate-600 font-black rounded-2xl hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                </button>
+                <div className="flex items-center gap-4">
+                    <div className="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary-600 rounded-full w-full" />
+                    </div>
                     <button
                         onClick={handleSubmit}
-                        className="flex items-center gap-2 px-8 py-3.5 bg-slate-900 text-white font-black rounded-2xl shadow-xl shadow-slate-200 hover:bg-black transition-all hover:translate-y-[-2px] active:translate-y-[0px] uppercase tracking-widest text-xs"
-                    >
-                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Save Identity
-                    </button>
-                    <button
-                        onClick={() => setStep(3)}
+                        disabled={isLoading}
                         className="flex items-center gap-2 px-8 py-3.5 bg-primary-600 text-white font-black rounded-2xl shadow-xl shadow-primary-200 hover:bg-primary-700 transition-all hover:translate-y-[-2px] active:translate-y-[0px] uppercase tracking-widest text-xs"
                     >
-                        Continue
-                        <ChevronRight className="w-4 h-4" />
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        Create Brand
                     </button>
                 </div>
             </div>
@@ -366,23 +579,8 @@ const CreateBrand = () => {
             <div className="max-w-4xl mx-auto">
                 {step === 1 && renderBrandIdentity()}
                 {step === 2 && renderVisualIdentity()}
-                {step > 2 && (
-                    <div className="py-20 text-center space-y-4">
-                        <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto text-slate-300">
-                            <Sparkles className="w-10 h-10" />
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Coming Soon</h3>
-                            <p className="text-sm text-slate-500 font-medium">This step is under development as part of the brand management evolution.</p>
-                        </div>
-                        <button
-                            onClick={() => setStep(step - 1)}
-                            className="text-primary-600 font-bold hover:underline"
-                        >
-                            Back to Previous Step
-                        </button>
-                    </div>
-                )}
+                {step === 3 && renderBrandVoice()}
+                {step === 4 && renderReview()}
             </div>
         </div>
     );
