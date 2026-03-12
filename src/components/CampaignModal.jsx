@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, ChevronRight, Layout, Info, Check, Linkedin, Instagram, Facebook, Loader2, Image as ImageIcon, Sparkles, Send, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,37 @@ const CampaignModal = ({ isOpen, onClose }) => {
     const [publishPlan, setPublishPlan] = useState('Schedule For Later');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const [brands, setBrands] = useState([]);
     const { user } = useAuth();
+
+    useEffect(() => {
+        if (isOpen && user) {
+            fetchBrands();
+        }
+    }, [isOpen, user]);
+
+    const fetchBrands = async () => {
+        // If user is not yet loaded, wait for the next effect trigger
+        if (!user?.id) {
+            console.log("fetchBrands: No user id yet");
+            return;
+        }
+
+        try {
+            console.log("fetchBrands: Fetching for user", user.id);
+            const { data, error } = await supabase
+                .from('brands')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            console.log("fetchBrands success:", data);
+            setBrands(data || []);
+        } catch (error) {
+            console.error('Error fetching brands in modal:', error);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -256,13 +286,25 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                 <div className="col-span-2 space-y-1.5">
                                     <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Brand *</label>
                                     <select
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:ring-2 focus:ring-primary-100 focus:border-primary-600 transition-all outline-none"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-600 transition-all outline-none"
                                         value={formData.brand}
-                                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                        onChange={(e) => {
+                                            const brandName = e.target.value;
+                                            const selectedBrand = brands.find(b => b.name === brandName);
+                                            setFormData({
+                                                ...formData,
+                                                brand: brandName,
+                                                tone: selectedBrand?.tone || formData.tone,
+                                                audience: selectedBrand?.target_audience || formData.audience
+                                            });
+                                        }}
                                     >
                                         <option value="">Select a Brand</option>
-                                        <option value="Acme Corp">Acme Corp · Technology</option>
-                                        <option value="ToolFlow AI">ToolFlow AI · SaaS</option>
+                                        {brands.map(b => (
+                                            <option key={b.id} value={b.name}>
+                                                {b.name} · {b.industry}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
 
