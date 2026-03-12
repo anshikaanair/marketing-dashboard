@@ -4,6 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
+import Brands from './pages/Brands';
+import CreateBrand from './pages/CreateBrand';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -49,6 +51,26 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <DashboardLayout>
               <Campaigns />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brands"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Brands />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/brands/new"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <CreateBrand />
             </DashboardLayout>
           </ProtectedRoute>
         }
