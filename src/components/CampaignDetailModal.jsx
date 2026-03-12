@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, CheckCircle2, ChevronRight, Layout, Info, Megaphone, Target, MessageSquare, Download, ExternalLink, Globe, User, History, Sparkles } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
     const [activeTab, setActiveTab] = useState('Overview');
+    const { user } = useAuth();
+    const userName = user?.email?.split('@')[0] || 'User';
 
     if (!isOpen || !campaign) return null;
 
@@ -51,8 +54,8 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                         <div className="flex flex-wrap gap-2">
                             {(campaign.platforms || []).map(p => (
                                 <span key={p} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${p === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                        p === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
-                                            'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                    p === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                        'bg-indigo-50 text-indigo-600 border-indigo-100'
                                     }`}>
                                     {p}
                                 </span>
@@ -126,8 +129,8 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                     <div key={platform} className="space-y-4 text-left">
                         <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${platform === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                    platform === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
-                                        'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                platform === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                    'bg-indigo-50 text-indigo-600 border-indigo-100'
                                 }`}>
                                 {platform}
                             </span>
@@ -226,7 +229,7 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                         </div>
                         <div className="flex items-center gap-4 text-sm font-bold">
                             <p className="text-slate-400">Brand: <span className="text-slate-900">{campaign.brand || 'Your Brand'}</span></p>
-                            <p className="text-slate-400">By <span className="text-slate-900">User</span></p>
+                            <p className="text-slate-400">By <span className="text-slate-900">{userName}</span></p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
