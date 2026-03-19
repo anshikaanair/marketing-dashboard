@@ -19,6 +19,13 @@ const CampaignModal = ({ isOpen, onClose }) => {
     const [publishPlan, setPublishPlan] = useState('Schedule For Later');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Overlay State
+    const [overlayHeadline, setOverlayHeadline] = useState('');
+    const [overlaySubtext, setOverlaySubtext] = useState('Stop juggling disconnected tools. DataSync Pro unifies your workflow.');
+    const [overlayCTA, setOverlayCTA] = useState('Learn More');
+    const [logoPosition, setLogoPosition] = useState('top left');
+    const [overlayLogo, setOverlayLogo] = useState(null);
+
     const [brands, setBrands] = useState([]);
     const { user } = useAuth();
 
@@ -50,6 +57,17 @@ const CampaignModal = ({ isOpen, onClose }) => {
             console.error('Error fetching brands in modal:', error);
         }
     };
+
+    // Keep overlay in sync with brand changes or initial load
+    useEffect(() => {
+        if (formData.brand && brands.length > 0) {
+            const selectedBrand = brands.find(b => b.name === formData.brand);
+            if (selectedBrand) {
+                if (!overlayLogo) setOverlayLogo(selectedBrand.logo);
+                if (overlayCTA === 'Learn More') setOverlayCTA(selectedBrand.cta_style || 'Learn More');
+            }
+        }
+    }, [formData.brand, brands]);
 
     if (!isOpen) return null;
 
@@ -109,6 +127,10 @@ const CampaignModal = ({ isOpen, onClose }) => {
             // Don't set default selections anymore
             setSelectedVariants({});
             setActiveVariant(1);
+
+            // Auto-populate overlay headline from first selected variant
+            const firstPlatform = formData.platforms[0];
+            setOverlayHeadline(results[firstPlatform]?.[0]?.title || '');
 
             setStep(2);
         } catch (error) {
@@ -207,23 +229,115 @@ const CampaignModal = ({ isOpen, onClose }) => {
             setGeneratedImages(newImages);
         } catch (error) {
             console.error("Visual generation failed:", error);
-            const isLocal = window.location.hostname === 'localhost';
+            const hostname = window.location.hostname;
+            const isLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+
             const message = isLocal
-                ? "Failed to generate images. Make sure the backend is running (cd backend && uvicorn main:app --reload)"
-                : "Failed to generate images. Please check if the backend service is running and VITE_API_BASE_URL is set correctly in Render.";
+                ? "Failed to generate images. Make sure the backend is running (cd backend && uvicorn main:app --reload) and reachable at http://localhost:8000"
+                : "Failed to generate images. Please check if the backend service is running and VITE_API_BASE_URL is set correctly in your environment (e.g. Render Dashboard).";
             alert(message);
         } finally {
             setIsGeneratingImage(false);
         }
     };
 
-    const handleDownload = (imageBase64, filename) => {
-        const link = document.createElement('a');
-        link.href = imageBase64;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    const handleDownload = (imageBase64, filename, isSquare = true) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = imageBase64;
+
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            const scale = canvas.width / 400;
+            const padding = 15 * scale;
+
+            // 1. Draw Overlay Card in bottom-right (Compact)
+            const cardWidth = 140 * scale;
+            const cardHeight = 65 * scale;
+            const cardPadding = 10 * scale;
+            const cornerRadius = 10 * scale;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+            ctx.shadowBlur = 10 * scale;
+            ctx.shadowColor = 'rgba(0,0,0,0.1)';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width - cardWidth - padding, canvas.height - cardHeight - padding, cardWidth, cardHeight, cornerRadius);
+            ctx.fill();
+            ctx.shadowBlur = 0; // Reset shadow
+
+            // 2. Draw Headline
+            ctx.fillStyle = '#0f172a';
+            ctx.font = `bold ${11 * scale}px Arial`;
+            ctx.textAlign = 'left';
+            ctx.fillText(overlayHeadline.substring(0, 20), canvas.width - cardWidth - padding + cardPadding, canvas.height - cardHeight - padding + (18 * scale));
+
+            // 3. Draw CTA Button (Tiny)
+            const btnWidth = 80 * scale;
+            const btnHeight = 22 * scale;
+            ctx.fillStyle = '#4f46e5';
+            ctx.beginPath();
+            ctx.roundRect(canvas.width - cardWidth - padding + cardPadding, canvas.height - padding - (30 * scale), btnWidth, btnHeight, 5 * scale);
+            ctx.fill();
+
+            ctx.fillStyle = 'white';
+            ctx.font = `bold ${9 * scale}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText(overlayCTA, canvas.width - cardWidth - padding + cardPadding + (btnWidth / 2), canvas.height - padding - (30 * scale) + (14 * scale));
+
+            // 4. Draw Real Logo
+            if (overlayLogo) {
+                const logoImg = new Image();
+                logoImg.crossOrigin = "anonymous";
+                logoImg.src = overlayLogo;
+                logoImg.onload = () => {
+                    const logoSize = 40 * scale;
+                    let logoX, logoY;
+
+                    if (logoPosition === 'top left') {
+                        logoX = padding; logoY = padding;
+                    } else if (logoPosition === 'top right') {
+                        logoX = canvas.width - padding - logoSize; logoY = padding;
+                    } else if (logoPosition === 'bottom left') {
+                        logoX = padding; logoY = canvas.height - padding - logoSize;
+                    } else {
+                        // Offset from CTA card if bottom right
+                        logoX = canvas.width - padding - logoSize;
+                        logoY = canvas.height - cardHeight - padding - logoSize - (10 * scale);
+                    }
+
+                    // Draw logo with white bg for contrast
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.roundRect(logoX, logoY, logoSize, logoSize, 10 * scale);
+                    ctx.fill();
+                    ctx.strokeStyle = '#f1f5f9';
+                    ctx.lineWidth = 1 * scale;
+                    ctx.stroke();
+                    ctx.drawImage(logoImg, logoX + (4 * scale), logoY + (4 * scale), logoSize - (8 * scale), logoSize - (8 * scale));
+
+                    const link = document.createElement('a');
+                    link.href = canvas.toDataURL('image/png');
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+            } else {
+                // Background export if no logo
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL('image/png');
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
     };
 
     const steps = [
@@ -297,6 +411,10 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 tone: selectedBrand?.tone || formData.tone,
                                                 audience: selectedBrand?.target_audience || formData.audience
                                             });
+                                            if (selectedBrand) {
+                                                setOverlayLogo(selectedBrand.logo);
+                                                setOverlayCTA(selectedBrand.cta_style || 'Learn More');
+                                            }
                                         }}
                                     >
                                         <option value="">Select a Brand</option>
@@ -595,82 +713,129 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                         {isGeneratingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                                         {isGeneratingImage ? "Designing Artwork..." : !Object.values(selectedVariants).some(v => v?.length > 0) ? "Select a Variant First" : "Generate AI Visuals"}
                                     </button>
+
+                                    <button
+                                        onClick={() => {
+                                            const key = `${activePlatform}-${activeVariant - 1}`;
+                                            if (generatedImages[key]) {
+                                                handleDownload(generatedImages[key], `${formData.productName}-final.png`);
+                                            }
+                                        }}
+                                        className="w-full py-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
+                                    >
+                                        <Download className="w-4 h-4" /> Download PNG
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Previews */}
+                            <div className="lg:col-span-8 space-y-8">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Asset Previews</label>
+                                    <div className="flex gap-2">
+                                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100">Ready for {activePlatform}</span>
+                                    </div>
                                 </div>
 
-                                {/* Previews */}
-                                <div className="lg:col-span-8 space-y-6">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Asset Previews</label>
-                                        <div className="flex gap-2">
-                                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100">Ready for {activePlatform}</span>
+                                <div className="grid grid-cols-2 gap-8">
+                                    {/* Square Preview */}
+                                    <div className="space-y-4">
+                                        <div className="aspect-square rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
+                                            {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                <>
+                                                    <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
+                                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
+                                                        <button
+                                                            onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
+                                                            className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                        >
+                                                            <Download className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Text Overlay Card */}
+                                                    <div className="absolute right-3 bottom-3 w-40 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
+                                                        <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
+                                                        <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
+                                                            {overlayCTA}
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Logo Overlay */}
+                                                    <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
+                                                        logoPosition === 'top right' ? 'top-3 right-3' :
+                                                            logoPosition === 'bottom left' ? 'bottom-3 left-3' :
+                                                                'bottom-3 right-3'
+                                                        }`}>
+                                                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl border-2 border-white overflow-hidden">
+                                                            {overlayLogo ? (
+                                                                <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
+                                                            ) : (
+                                                                <Sparkles className="text-primary-600 w-6 h-6" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
+                                                    <ImageIcon className="w-12 h-12 text-slate-400" />
+                                                    <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Square Asset</span>
+                                                </div>
+                                            )}
                                         </div>
+                                        <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Square (1:1)</p>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-6">
-                                        {/* Square Preview */}
-                                        <div className="space-y-4">
-                                            <div className="aspect-square rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden relative group">
-                                                {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
-                                                    <>
-                                                        <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
-                                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
-                                                                className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
-                                                            >
-                                                                <Download className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
-                                                        <ImageIcon className="w-12 h-12 text-slate-400" />
-                                                        <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Square Asset</span>
+                                    {/* Landscape Preview */}
+                                    <div className="space-y-4">
+                                        <div className="aspect-video rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
+                                            {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                <>
+                                                    <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
+                                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
+                                                        <button
+                                                            onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`, false)}
+                                                            className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                        >
+                                                            <Download className="w-4 h-4" />
+                                                        </button>
                                                     </div>
-                                                )}
-                                                <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-lg border border-white">
-                                                    <p className="text-[10px] font-black text-slate-900 leading-tight line-clamp-2">
-                                                        {generatedCopy[activePlatform][activeVariant - 1]?.title}
-                                                    </p>
-                                                    <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-lg">Learn More</button>
+
+                                                    {/* Text Overlay Card */}
+                                                    <div className="absolute right-3 bottom-3 w-48 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
+                                                        <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
+                                                        <button className="mt-2 px-4 py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
+                                                            {overlayCTA}
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Logo Overlay */}
+                                                    <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
+                                                        logoPosition === 'top right' ? 'top-3 right-3' :
+                                                            logoPosition === 'bottom left' ? 'bottom-3 left-3' :
+                                                                'bottom-3 right-3'
+                                                        }`}>
+                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
+                                                            {overlayLogo ? (
+                                                                <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
+                                                            ) : (
+                                                                <Sparkles className="text-primary-600 w-4 h-4" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
+                                                    <ImageIcon className="w-12 h-12 text-slate-400" />
+                                                    <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Landscape</span>
                                                 </div>
-                                            </div>
-                                            <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Square (1:1)</p>
+                                            )}
                                         </div>
+                                        <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Landscape (16:9)</p>
 
-                                        {/* Landscape Preview */}
-                                        <div className="space-y-6 flex flex-col justify-between">
-                                            <div className="aspect-video rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden relative group">
-                                                {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
-                                                    <>
-                                                        <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
-                                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`)}
-                                                                className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
-                                                            >
-                                                                <Download className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
-                                                        <ImageIcon className="w-12 h-12 text-slate-400" />
-                                                        <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Landscape</span>
-                                                    </div>
-                                                )}
-                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/50 to-transparent p-4">
-                                                    <p className="text-xs font-bold text-white line-clamp-1">
-                                                        {generatedCopy[activePlatform][activeVariant - 1]?.title}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Landscape (16:9)</p>
-
-                                            <div className="card p-4 border-slate-100 bg-slate-50/50">
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selected Hook</p>
-                                                <p className="text-xs font-bold text-slate-800 italic">"{generatedCopy[activePlatform][activeVariant - 1]?.title}"</p>
-                                            </div>
+                                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selected Hook</p>
+                                            <p className="text-xs font-bold text-slate-800 italic">"{generatedCopy[activePlatform][activeVariant - 1]?.title}"</p>
                                         </div>
                                     </div>
                                 </div>
@@ -858,7 +1023,7 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

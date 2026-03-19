@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Campaigns from './pages/Campaigns';
 import Brands from './pages/Brands';
 import CreateBrand from './pages/CreateBrand';
+import Approvals from './pages/Approvals';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -51,6 +52,16 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <DashboardLayout>
               <Campaigns />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/approvals"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <Approvals />
             </DashboardLayout>
           </ProtectedRoute>
         }

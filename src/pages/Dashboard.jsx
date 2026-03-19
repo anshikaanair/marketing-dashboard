@@ -51,41 +51,58 @@ const Dashboard = () => {
     const userName = user?.email?.split('@')[0] || 'there';
 
     useEffect(() => {
-        if (user) {
+        if (user?.id) {
+            // Initializing from cache
+            const cachedCampaigns = localStorage.getItem(`campaigns_${user.id}`);
+            const cachedActivities = localStorage.getItem(`activities_${user.id}`);
+
+            if (cachedCampaigns) setCampaigns(JSON.parse(cachedCampaigns));
+            if (cachedActivities) setActivities(JSON.parse(cachedActivities));
+
+            // If cache exists, skip the full-screen loader
+            if (cachedCampaigns || cachedActivities) {
+                setLoading(false);
+            }
+
             fetchDashboardData();
         }
     }, [user]);
 
     const fetchDashboardData = async () => {
-        setLoading(true);
+        if (!user?.id) return;
+
+        // Show loading only if no cache exists
+        const hasCache = localStorage.getItem(`campaigns_${user.id}`);
+        if (!hasCache) setLoading(true);
+
         try {
-            console.log("Fetching dashboard data...");
-            // Fetch Recent Campaigns
+            console.log("Refreshing dashboard data for user:", user.id);
+            // Fetch Recent Campaigns for this user
             const { data: campaignsData, error: campaignsError } = await supabase
                 .from('campaigns')
                 .select('*')
+                .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
 
-            if (campaignsError) {
-                console.error("Supabase Error (campaigns):", campaignsError);
-                throw campaignsError;
-            }
+            if (campaignsError) throw campaignsError;
 
-            // Fetch Activity Feed
+            // Fetch Activity Feed for this user
             const { data: activitiesData, error: activitiesError } = await supabase
                 .from('activities')
                 .select('*')
+                .eq('user_id', user.id)
                 .order('created_at', { ascending: false })
                 .limit(5);
 
-            if (activitiesError) {
-                console.error("Supabase Error (activities):", activitiesError);
-                throw activitiesError;
-            }
+            if (activitiesError) throw activitiesError;
 
-            console.log("Successfully fetched campaigns:", campaignsData?.length);
             setCampaigns(campaignsData || []);
             setActivities(activitiesData || []);
+
+            localStorage.setItem(`campaigns_${user.id}`, JSON.stringify(campaignsData || []));
+            localStorage.setItem(`activities_${user.id}`, JSON.stringify(activitiesData || []));
+
+            console.log("Dashboard data refreshed and cached.");
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error);
         } finally {

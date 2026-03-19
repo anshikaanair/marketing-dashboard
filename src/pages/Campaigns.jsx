@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Megaphone,
     Search,
@@ -8,51 +8,63 @@ import {
     ChevronDown,
     Linkedin,
     Instagram,
-    Facebook
+    Facebook,
+    Loader2
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import CampaignModal from '../components/CampaignModal';
+import CampaignDetailModal from '../components/CampaignDetailModal';
 
 const Campaigns = () => {
+    const { user } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [selectedCampaign, setSelectedCampaign] = useState(null);
+    const [campaigns, setCampaigns] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const userName = user?.email?.split('@')[0] || 'User';
 
-    const campaigns = [
-        {
-            id: 1,
-            name: "Q1 Product Launch — DataSync Pro",
-            author: "Emily Rodriguez",
-            brand: "Acme Corp",
-            brandColor: "bg-primary-600",
-            status: "Pending Approval",
-            statusColor: "text-orange-600 bg-orange-50 border-orange-100",
-            platforms: ["LinkedIn", "Facebook"],
-            lastUpdated: "Mar 4, 2025",
-            nextScheduled: "—"
-        },
-        {
-            id: 2,
-            name: "Spring Brand Awareness — TechFlow AI",
-            author: "James Wilson",
-            brand: "TechFlow",
-            brandColor: "bg-sky-500",
-            status: "Approved",
-            statusColor: "text-emerald-600 bg-emerald-50 border-emerald-100",
-            platforms: ["LinkedIn", "Instagram"],
-            lastUpdated: "Mar 1, 2025",
-            nextScheduled: "Mar 6"
-        },
-        {
-            id: 3,
-            name: "Customer Retention Drive — March 2025",
-            author: "Sarah Johnson",
-            brand: "Acme Corp",
-            brandColor: "bg-primary-600",
-            status: "Scheduled",
-            statusColor: "text-primary-600 bg-primary-50 border-primary-100",
-            platforms: ["LinkedIn", "Facebook"],
-            lastUpdated: "Feb 28, 2025",
-            nextScheduled: "Mar 7"
+    useEffect(() => {
+        if (user?.id) {
+            // Initializing from cache
+            const cached = localStorage.getItem(`campaigns_${user.id}`);
+            if (cached) {
+                setCampaigns(JSON.parse(cached));
+                setLoading(false); // Skip initial loader if we have data
+            }
+            fetchCampaigns();
         }
-    ];
+    }, [user]);
+
+    const fetchCampaigns = async () => {
+        if (!user?.id) return;
+
+        const hasCache = localStorage.getItem(`campaigns_${user.id}`);
+        if (!hasCache) setLoading(true);
+
+        try {
+            const { data, error } = await supabase
+                .from('campaigns')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            setCampaigns(data || []);
+            localStorage.setItem(`campaigns_${user.id}`, JSON.stringify(data || []));
+        } catch (error) {
+            console.error('Error fetching campaigns:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRowClick = (campaign) => {
+        setSelectedCampaign(campaign);
+        setIsDetailModalOpen(true);
+    };
 
     const PlatformBadge = ({ platform }) => {
         const colors = {
@@ -72,8 +84,15 @@ const Campaigns = () => {
             <div className="flex justify-between items-end">
                 <div>
                     <h2 className="text-4xl font-black text-slate-900 tracking-tight">Campaigns</h2>
-                    <p className="text-slate-500 mt-2 font-medium">6 campaigns across 3 brands</p>
+                    <p className="text-slate-500 mt-2 font-medium">{campaigns.length} campaigns across your brands</p>
                 </div>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-100 hover:bg-primary-700 transition-all hover:translate-y-[-1px] active:translate-y-[0px] shadow-primary-200"
+                >
+                    <Plus className="w-5 h-5" />
+                    New Campaign
+                </button>
             </div>
 
             <div className="space-y-4">
@@ -119,44 +138,79 @@ const Campaigns = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {campaigns.map((c) => (
-                                <tr key={c.id} className="hover:bg-slate-50/50 transition-colors group">
-                                    <td className="px-6 py-5">
-                                        <p className="text-sm font-bold text-slate-900 group-hover:text-primary-600 transition-colors">{c.name}</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium underline underline-offset-2 decoration-slate-200">by {c.author}</p>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-2">
-                                            <div className={`w-2.5 h-2.5 rounded-full ${c.brandColor}`} />
-                                            <span className="text-sm font-bold text-slate-700">{c.brand}</span>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="7" className="py-20 text-center">
+                                        <div className="flex flex-col items-center gap-3 text-slate-400 font-black tracking-widest uppercase">
+                                            <Loader2 className="w-8 h-8 animate-spin" />
+                                            <p className="text-[10px]">Loading Campaigns...</p>
                                         </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${c.statusColor}`}>
-                                            • {c.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex gap-1.5 flex-wrap">
-                                            {c.platforms.map(p => <PlatformBadge key={p} platform={p} />)}
-                                            <span className="w-4 h-4 rounded bg-slate-100 text-[10px] flex items-center justify-center font-bold text-slate-400 hover:bg-slate-200 cursor-pointer">X</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-sm text-slate-500 font-medium">{c.lastUpdated}</td>
-                                    <td className="px-6 py-5 text-sm text-slate-400 font-medium">{c.nextScheduled}</td>
-                                    <td className="px-6 py-5 text-right">
-                                        <button className="text-slate-300 hover:text-slate-600 transition-colors">
-                                            <MoreHorizontal className="w-5 h-5" />
-                                        </button>
                                     </td>
                                 </tr>
-                            ))}
+                            ) : campaigns.length > 0 ? (
+                                campaigns.map((c) => (
+                                    <tr
+                                        key={c.id}
+                                        onClick={() => handleRowClick(c)}
+                                        className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                                    >
+                                        <td className="px-6 py-5">
+                                            <p className="text-sm font-bold text-slate-900 group-hover:text-primary-600 transition-colors uppercase tracking-tight">
+                                                {c.product_name} — {c.objective}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-1.5 font-bold uppercase tracking-widest">
+                                                by {userName}
+                                            </p>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-primary-600" />
+                                                <span className="text-sm font-bold text-slate-700 tracking-tight">{c.brand || 'Your Brand'}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider ${c.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                                c.status === 'Scheduled' ? 'bg-primary-50 text-primary-600 border-primary-100' :
+                                                    'bg-orange-50 text-orange-600 border-orange-100'
+                                                }`}>
+                                                • {c.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex gap-1.5 flex-wrap">
+                                                {(c.platforms || []).map(p => <PlatformBadge key={p} platform={p} />)}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5 text-sm text-slate-500 font-bold uppercase tracking-tight">
+                                            {new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </td>
+                                        <td className="px-6 py-5 text-sm text-slate-300 font-bold uppercase tracking-widest">
+                                            {c.publish_plan === 'Schedule For Later' ? 'Pending' : '—'}
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
+                                            <button className="text-slate-300 hover:text-slate-600 transition-colors">
+                                                <MoreHorizontal className="w-5 h-5" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="7" className="py-20 text-center">
+                                        <div className="flex flex-col items-center gap-3 text-slate-300 uppercase tracking-widest">
+                                            <Megaphone className="w-12 h-12" />
+                                            <p className="text-xs font-bold">No Campaigns Found</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+            <CampaignModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); fetchCampaigns(); }} />
+            <CampaignDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} campaign={selectedCampaign} />
         </div>
     );
 };
