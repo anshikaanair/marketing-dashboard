@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, CheckCircle2, XCircle, MessageSquare, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import CampaignDetailModal from '../components/CampaignDetailModal';
 
 const ADMIN_EMAIL = 'anshika.nair@10xds.com';
 
@@ -13,6 +14,7 @@ const Approvals = () => {
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [commentText, setCommentText] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -231,7 +233,10 @@ const Approvals = () => {
                                             {selectedCampaign.brand} <span className="mx-2">•</span> Submitted by {selectedCampaign.auth_users?.email?.split('@')[0] || 'Unknown'}
                                         </p>
                                     </div>
-                                    <button className="px-4 py-2 border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition-colors shrink-0">
+                                    <button
+                                        onClick={() => setIsDetailModalOpen(true)}
+                                        className="px-4 py-2 border border-slate-200 text-slate-700 font-bold text-sm rounded-lg hover:bg-slate-50 transition-colors shrink-0"
+                                    >
                                         View Campaign
                                     </button>
                                 </div>
@@ -333,6 +338,12 @@ const Approvals = () => {
                     )}
                 </div>
             </div>
+
+            <CampaignDetailModal
+                isOpen={isDetailModalOpen}
+                onClose={() => setIsDetailModalOpen(false)}
+                campaign={selectedCampaign}
+            />
         </div>
     );
 };

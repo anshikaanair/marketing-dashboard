@@ -9,6 +9,8 @@ const Brands = () => {
     const [brands, setBrands] = useState([]);
     const [selectedBrand, setSelectedBrand] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState(null);
 
     useEffect(() => {
         if (user?.id) {
@@ -54,33 +56,209 @@ const Brands = () => {
         }
     };
 
+    const handleDelete = async () => {
+        if (!selectedBrand || !window.confirm(`Are you sure you want to delete ${selectedBrand.name}?`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('brands')
+                .delete()
+                .eq('id', selectedBrand.id);
+
+            if (error) throw error;
+
+            const updatedBrands = brands.filter(b => b.id !== selectedBrand.id);
+            setBrands(updatedBrands);
+            setSelectedBrand(updatedBrands.length > 0 ? updatedBrands[0] : null);
+            localStorage.setItem(`brands_${user.id}`, JSON.stringify(updatedBrands));
+        } catch (error) {
+            console.error('Error deleting brand:', error);
+            alert('Failed to delete brand.');
+        }
+    };
+
+    const handleEditToggle = () => {
+        if (isEditing) {
+            setIsEditing(false);
+            setEditForm(null);
+        } else {
+            setIsEditing(true);
+            setEditForm({ ...selectedBrand });
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            const { error } = await supabase
+                .from('brands')
+                .update({
+                    name: editForm.name,
+                    industry: editForm.industry,
+                    colors: editForm.colors,
+                    typography: editForm.typography,
+                    cta_style: editForm.cta_style
+                })
+                .eq('id', selectedBrand.id);
+
+            if (error) throw error;
+
+            const updatedBrands = brands.map(b => b.id === selectedBrand.id ? editForm : b);
+            setBrands(updatedBrands);
+            setSelectedBrand(editForm);
+            setIsEditing(false);
+            setEditForm(null);
+            localStorage.setItem(`brands_${user.id}`, JSON.stringify(updatedBrands));
+        } catch (error) {
+            console.error('Error updating brand:', error);
+            alert('Failed to update brand.');
+        }
+    };
+
     const renderBrandDetails = () => {
         if (!selectedBrand) return null;
+
+        if (isEditing) {
+            return (
+                <div className="card p-8 border-primary-100 bg-white space-y-8 shadow-xl ring-1 ring-primary-50">
+                    <div className="flex items-start justify-between pb-6 border-b border-slate-100">
+                        <div className="flex items-center gap-4 flex-1">
+                            <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-sm uppercase overflow-hidden">
+                                {editForm.logo_url ? (
+                                    <img src={editForm.logo_url} className="w-full h-full object-contain" alt="Logo" />
+                                ) : (
+                                    editForm.name.substring(0, 2)
+                                )}
+                            </div>
+                            <div className="flex-1 space-y-3">
+                                <input
+                                    type="text"
+                                    value={editForm.name}
+                                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                    className="w-full text-xl font-bold text-slate-900 bg-slate-50 border-none rounded-lg px-3 py-1 focus:ring-2 focus:ring-primary-500 outline-none"
+                                />
+                                <input
+                                    type="text"
+                                    value={editForm.industry}
+                                    onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+                                    className="w-full text-sm text-slate-500 bg-slate-50 border-none rounded-lg px-3 py-1 focus:ring-2 focus:ring-primary-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setIsEditing(false)}
+                                className="px-4 py-2 text-slate-500 font-bold text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className="px-6 py-2 bg-primary-600 text-white font-bold text-sm rounded-lg hover:bg-primary-700 transition-all shadow-md shadow-primary-100"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
+                        <div className="space-y-10">
+                            <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Color Palette</h4>
+                                <div className="space-y-4">
+                                    {Object.entries(editForm.colors || {}).map(([key, val]) => (
+                                        <div key={key} className="flex items-center gap-4">
+                                            <input
+                                                type="color"
+                                                value={val}
+                                                onChange={(e) => setEditForm({
+                                                    ...editForm,
+                                                    colors: { ...editForm.colors, [key]: e.target.value }
+                                                })}
+                                                className="w-10 h-10 p-0 border-none rounded-xl cursor-pointer bg-transparent"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">{key}</p>
+                                                <input
+                                                    type="text"
+                                                    value={val}
+                                                    onChange={(e) => setEditForm({
+                                                        ...editForm,
+                                                        colors: { ...editForm.colors, [key]: e.target.value }
+                                                    })}
+                                                    className="text-sm font-black text-slate-900 border-none bg-transparent p-0 focus:ring-0 w-24"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-10">
+                            <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Typography & Voice</h4>
+                                <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500">Primary Font</label>
+                                        <select
+                                            value={editForm.typography?.primary || 'Inter'}
+                                            onChange={(e) => setEditForm({
+                                                ...editForm,
+                                                typography: { ...editForm.typography, primary: e.target.value }
+                                            })}
+                                            className="w-full text-sm font-bold bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500"
+                                        >
+                                            {['Inter', 'Roboto', 'Outfit', 'Plus Jakarta Sans', 'Outfit'].map(f => <option key={f} value={f}>{f}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500">Default CTA</label>
+                                        <select
+                                            value={editForm.cta_style || 'Learn More'}
+                                            onChange={(e) => setEditForm({ ...editForm, cta_style: e.target.value })}
+                                            className="w-full text-sm font-bold bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500"
+                                        >
+                                            {['Learn More', 'Get Started', 'Discover More', 'Try for Free', 'Book a Demo', 'Shop Now'].map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
         return (
             <div className="card p-8 border-slate-200 bg-white space-y-8 shadow-sm">
                 <div className="flex items-start justify-between pb-6 border-b border-slate-100">
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-sm uppercase">
+                        <div className="w-14 h-14 bg-primary-600 rounded-xl flex items-center justify-center text-white text-xl font-bold shadow-sm uppercase overflow-hidden">
                             {selectedBrand.logo_url ? (
-                                <img src={selectedBrand.logo_url} className="w-full h-full object-contain rounded-xl" alt={selectedBrand.name} />
+                                <img src={selectedBrand.logo_url} className="w-full h-full object-contain" alt={selectedBrand.name} />
                             ) : (
                                 selectedBrand.name.substring(0, 2)
                             )}
                         </div>
                         <div>
                             <h3 className="text-xl font-bold text-slate-900 tracking-tight">{selectedBrand.name}</h3>
-                            <p className="text-sm text-slate-500 font-medium">
+                            <p className="text-sm text-slate-500 font-medium tracking-tight uppercase tracking-wider">
                                 {selectedBrand.industry}
                             </p>
                         </div>
                     </div>
                     <div className="flex gap-3">
-                        <button className="flex items-center gap-2 px-4 py-2 text-rose-600 font-medium text-sm rounded-lg border border-rose-200 hover:bg-rose-50 transition-colors">
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 px-4 py-2 text-rose-600 font-bold text-sm rounded-lg border border-rose-100 hover:bg-rose-50 transition-colors"
+                        >
                             <Trash2 className="w-4 h-4" />
                             Delete
                         </button>
-                        <button className="flex items-center gap-2 px-4 py-2 text-slate-700 font-medium text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+                        <button
+                            onClick={handleEditToggle}
+                            className="flex items-center gap-2 px-4 py-2 text-slate-700 font-bold text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                        >
                             <Edit2 className="w-4 h-4" />
                             Edit Brand
                         </button>
@@ -92,17 +270,17 @@ const Brands = () => {
                     <div className="space-y-10">
                         {/* Color Palette */}
                         <div>
-                            <h4 className="text-base font-bold text-slate-900 mb-6 tracking-tight">Color Palette</h4>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Color Palette</h4>
                             <div className="space-y-4">
                                 {selectedBrand.colors && Object.entries(selectedBrand.colors).map(([key, val]) => (
                                     <div key={key} className="flex items-center gap-4">
                                         <div
-                                            className="w-10 h-10 rounded-xl shadow-sm border border-slate-200"
+                                            className="w-10 h-10 rounded-xl shadow-sm border border-slate-100 ring-1 ring-slate-100"
                                             style={{ backgroundColor: val }}
                                         />
-                                        <div className="flex gap-3 items-center">
-                                            <span className="text-sm font-bold text-slate-900 uppercase">{val}</span>
-                                            <span className="text-sm text-slate-500 capitalize">{key}</span>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-sm font-black text-slate-900 uppercase tracking-tight">{val}</span>
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{key}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -111,13 +289,13 @@ const Brands = () => {
 
                         {/* Logo */}
                         <div>
-                            <h4 className="text-base font-bold text-slate-900 mb-6 tracking-tight">Logo</h4>
-                            <div className="border-2 border-dashed border-slate-200 rounded-2xl h-32 flex items-center justify-center bg-slate-50">
-                                <div className="w-12 h-12 bg-primary-600 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-sm uppercase">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Logo</h4>
+                            <div className="border border-slate-100 rounded-2xl h-32 flex items-center justify-center bg-slate-50/50">
+                                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-xl border-2 border-white overflow-hidden">
                                     {selectedBrand.logo_url ? (
-                                        <img src={selectedBrand.logo_url} className="w-full h-full object-contain rounded-full" alt="Logo" />
+                                        <img src={selectedBrand.logo_url} className="w-full h-full object-contain" alt="Logo" />
                                     ) : (
-                                        selectedBrand.name.substring(0, 2)
+                                        <span className="text-lg font-black text-primary-600 uppercase">{selectedBrand.name.substring(0, 2)}</span>
                                     )}
                                 </div>
                             </div>
@@ -128,24 +306,24 @@ const Brands = () => {
                     <div className="space-y-10">
                         {/* Typography */}
                         <div>
-                            <h4 className="text-base font-bold text-slate-900 mb-6 tracking-tight">Typography</h4>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Typography</h4>
                             <div className="space-y-5">
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-slate-100 text-slate-800 font-serif font-medium w-8 h-8 rounded shrink-0 flex items-center justify-center text-sm">
+                                    <div className="bg-slate-100 text-slate-400 font-medium w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-xs border border-slate-50">
                                         Aa
                                     </div>
-                                    <div className="flex gap-3 items-center">
-                                        <span className="text-sm font-semibold text-slate-900">{selectedBrand.typography?.primary || 'Inter'}</span>
-                                        <span className="text-sm text-slate-500">Primary</span>
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-sm font-black text-slate-900 tracking-tight">{selectedBrand.typography?.primary || 'Inter'}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Primary</span>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <div className="bg-slate-100 text-slate-800 font-sans font-medium w-8 h-8 rounded shrink-0 flex items-center justify-center text-sm">
+                                    <div className="bg-slate-100 text-slate-400 font-medium w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-xs border border-slate-50">
                                         Aa
                                     </div>
-                                    <div className="flex gap-3 items-center">
-                                        <span className="text-sm font-semibold text-slate-900">{selectedBrand.typography?.secondary || 'Poppins'}</span>
-                                        <span className="text-sm text-slate-500">Secondary</span>
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="text-sm font-black text-slate-900 tracking-tight">{selectedBrand.typography?.secondary || 'Poppins'}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Secondary</span>
                                     </div>
                                 </div>
                             </div>
@@ -153,21 +331,21 @@ const Brands = () => {
 
                         {/* CTA Preset */}
                         <div>
-                            <h4 className="text-base font-bold text-slate-900 mb-6 tracking-tight">CTA Preset</h4>
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">CTA Preset</h4>
                             <div className="flex flex-wrap gap-2.5">
                                 {[
                                     selectedBrand.cta_style || 'Learn More',
                                     'Get Started', 'Discover More', 'Try for Free', 'Book a Demo', 'Shop Now'
                                 ].map((cta, i) => (
-                                    <span
+                                    <button
                                         key={i}
-                                        className={`px-4 py-2 rounded-lg text-sm font-medium ${i === 0
-                                                ? 'bg-primary-600 text-white'
-                                                : 'bg-slate-50 text-slate-600 border border-slate-200'
+                                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${i === 0
+                                            ? 'bg-primary-600 text-white shadow-lg shadow-primary-200'
+                                            : 'bg-white text-slate-500 border border-slate-100 hover:border-slate-200'
                                             }`}
                                     >
                                         {cta}
-                                    </span>
+                                    </button>
                                 ))}
                             </div>
                         </div>
