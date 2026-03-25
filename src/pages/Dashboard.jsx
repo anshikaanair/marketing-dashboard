@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Megaphone, Clock, Calendar, AlertCircle, ArrowUpRight, Play, CheckSquare, Plus, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import CampaignModal from '../components/CampaignModal';
 import CampaignDetailModal from '../components/CampaignDetailModal';
 
-const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend }) => (
-    <div className="card group hover:scale-[1.02] transition-transform duration-200 cursor-pointer">
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, trend, onClick }) => (
+    <div
+        onClick={onClick}
+        className="card group hover:scale-[1.02] transition-transform duration-200 cursor-pointer"
+    >
         <div className="flex justify-between items-start mb-4">
             <div className={`p-2 rounded-lg ${colorClass} bg-opacity-10 text-xl`}>
                 <Icon className={`w-5 h-5 ${colorClass.replace('bg-', 'text-')}`} />
@@ -42,6 +46,7 @@ const ActivityItem = ({ title, time, type, status, onClick }) => (
 
 const Dashboard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -126,8 +131,16 @@ const Dashboard = () => {
     const stats = {
         total: campaigns.length,
         pending: campaigns.filter(c => c.status === 'Pending Approval').length,
-        scheduled: 0,
-        failed: 0
+        scheduled: campaigns.reduce((acc, c) => {
+            if (!c.schedules) return acc;
+            const scheduledCount = Object.values(c.schedules).filter(s => s.status === 'Scheduled').length;
+            return acc + (scheduledCount > 0 ? 1 : 0);
+        }, 0),
+        failed: campaigns.reduce((acc, c) => {
+            if (!c.schedules) return acc;
+            const failedCount = Object.values(c.schedules).filter(s => s.status === 'Failed').length;
+            return acc + (failedCount > 0 ? 1 : 0);
+        }, 0)
     };
 
     return (
@@ -154,6 +167,7 @@ const Dashboard = () => {
                     icon={Megaphone}
                     colorClass="bg-primary-600"
                     trend="0%"
+                    onClick={() => navigate('/campaigns')}
                 />
                 <StatCard
                     title="Pending Approvals"
@@ -161,6 +175,7 @@ const Dashboard = () => {
                     subtext="Needs your review"
                     icon={Clock}
                     colorClass="bg-amber-500"
+                    onClick={() => navigate('/approvals')}
                 />
                 <StatCard
                     title="Scheduled (7d)"
@@ -168,6 +183,7 @@ const Dashboard = () => {
                     subtext="Across all platforms"
                     icon={Calendar}
                     colorClass="bg-sky-500"
+                    onClick={() => navigate('/schedule')}
                 />
                 <StatCard
                     title="Failed Publishes"
@@ -175,6 +191,7 @@ const Dashboard = () => {
                     subtext="Need retry"
                     icon={AlertCircle}
                     colorClass="bg-rose-500"
+                    onClick={() => navigate('/schedule')}
                 />
             </div>
 

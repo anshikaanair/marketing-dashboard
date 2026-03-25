@@ -62,7 +62,7 @@ const Sidebar = () => {
                         active={location.pathname === '/campaigns'}
                     />
                     <SidebarItem icon={CheckSquare} label="Approvals" href="/approvals" active={location.pathname === '/approvals'} />
-                    <SidebarItem icon={Calendar} label="Scheduler" href="/scheduler" active={location.pathname === '/scheduler'} />
+                    <SidebarItem icon={Calendar} label="Schedule" href="/schedule" active={location.pathname === '/schedule'} />
                     <SidebarItem icon={Layers} label="Brands" href="/brands" active={location.pathname === '/brands'} />
                     <SidebarItem icon={Users} label="Social Accounts" href="/social-accounts" active={location.pathname === '/social-accounts'} />
                     <SidebarItem icon={FileText} label="Audit Logs" href="/audit-logs" active={location.pathname === '/audit-logs'} />

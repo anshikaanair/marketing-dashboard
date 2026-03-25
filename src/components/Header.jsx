@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Bell, HelpCircle, ChevronDown, User, Settings, LogOut } from 'lucide-react';
+import { Bell, HelpCircle, ChevronDown, User, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Header = () => {
@@ -8,21 +8,8 @@ const Header = () => {
 
     return (
         <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-100 px-8 flex items-center justify-between sticky top-0 z-30">
-            <div className="flex items-center gap-4 flex-1 max-w-xl">
-                <div className="bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-3 group focus-within:ring-2 focus-within:ring-primary-100 focus-within:border-primary-300 transition-all">
-                    <div className="w-5 h-5 rounded bg-primary-600 flex-shrink-0" />
-                    <span className="text-sm font-semibold text-slate-700">Acme Corp</span>
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                </div>
-
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                    <input
-                        type="text"
-                        placeholder="Search campaigns, logs..."
-                        className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:bg-white focus:border-primary-400 transition-all"
-                    />
-                </div>
+            <div className="flex items-center gap-4 flex-1">
+                {/* Brand and Search removed per user request */}
             </div>
 
             <div className="flex items-center gap-4">
