@@ -96,7 +96,11 @@ const Brands = () => {
                     industry: editForm.industry,
                     colors: editForm.colors,
                     typography: editForm.typography,
-                    cta_style: editForm.cta_style
+                    cta_style: editForm.cta_style,
+                    aesthetic: editForm.aesthetic,
+                    values: editForm.values,
+                    business_overview: editForm.business_overview,
+                    tagline: editForm.tagline
                 })
                 .eq('id', selectedBrand.id);
 
@@ -192,24 +196,44 @@ const Brands = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tagline</label>
+                                <input
+                                    type="text"
+                                    value={editForm.tagline || ''}
+                                    onChange={(e) => setEditForm({ ...editForm, tagline: e.target.value })}
+                                    className="w-full text-sm font-bold bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none"
+                                    placeholder="Brand tagline"
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-10">
-                            <div>
-                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Typography & Voice</h4>
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Voice & Style</h4>
                                 <div className="space-y-4">
                                     <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold text-slate-500">Visual Aesthetic</label>
+                                        <textarea
+                                            rows={2}
+                                            value={editForm.aesthetic || ''}
+                                            onChange={(e) => setEditForm({ ...editForm, aesthetic: e.target.value })}
+                                            className="w-full text-sm font-medium bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                            placeholder="Describe the visual style..."
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-slate-500">Primary Font</label>
-                                        <select
-                                            value={editForm.typography?.primary || 'Inter'}
+                                        <input
+                                            type="text"
+                                            value={editForm.typography?.primary || ''}
                                             onChange={(e) => setEditForm({
                                                 ...editForm,
                                                 typography: { ...editForm.typography, primary: e.target.value }
                                             })}
-                                            className="w-full text-sm font-bold bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500"
-                                        >
-                                            {['Inter', 'Roboto', 'Outfit', 'Plus Jakarta Sans', 'Outfit'].map(f => <option key={f} value={f}>{f}</option>)}
-                                        </select>
+                                            className="w-full text-sm font-bold bg-slate-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-primary-500 outline-none"
+                                        />
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[10px] font-bold text-slate-500">Default CTA</label>
@@ -222,6 +246,19 @@ const Brands = () => {
                                         </select>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="col-span-full space-y-6">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Business Overview</label>
+                                <textarea
+                                    rows={3}
+                                    value={editForm.business_overview || ''}
+                                    onChange={(e) => setEditForm({ ...editForm, business_overview: e.target.value })}
+                                    className="w-full text-sm font-medium bg-slate-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                                    placeholder="Company overview..."
+                                />
                             </div>
                         </div>
                     </div>
@@ -266,7 +303,6 @@ const Brands = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-10">
-                    {/* Left Column: Colors, Logo */}
                     <div className="space-y-10">
                         {/* Color Palette */}
                         <div>
@@ -287,6 +323,14 @@ const Brands = () => {
                             </div>
                         </div>
 
+                        {/* Tagline */}
+                        {selectedBrand.tagline && (
+                            <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tagline</h4>
+                                <p className="text-lg font-bold text-slate-900 italic">"{selectedBrand.tagline}"</p>
+                            </div>
+                        )}
+
                         {/* Logo */}
                         <div>
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Logo</h4>
@@ -302,8 +346,15 @@ const Brands = () => {
                         </div>
                     </div>
 
-                    {/* Right Column: Typography, CTA Preset */}
                     <div className="space-y-10">
+                        {/* Aesthetic */}
+                        {selectedBrand.aesthetic && (
+                            <div>
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Visual Aesthetic</h4>
+                                <p className="text-sm font-medium text-slate-600 leading-relaxed">{selectedBrand.aesthetic}</p>
+                            </div>
+                        )}
+
                         {/* Typography */}
                         <div>
                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Typography</h4>
@@ -350,6 +401,14 @@ const Brands = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Business Overview */}
+                    {selectedBrand.business_overview && (
+                        <div className="col-span-full">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Business Overview</h4>
+                            <p className="text-sm font-medium text-slate-600 leading-relaxed border-t border-slate-50 pt-4">{selectedBrand.business_overview}</p>
+                        </div>
+                    )}
                 </div>
             </div>
         );

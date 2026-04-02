@@ -15,7 +15,8 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
     // Visual Studio State
     const [selectedTemplate, setSelectedTemplate] = useState('Minimal');
-    const [generatedImages, setGeneratedImages] = useState({}); // { 'LinkedIn-0': 'base64...' }
+    const [postType, setPostType] = useState('Single Ad'); // 'Single Ad' or 'Carousel Post'
+    const [generatedImages, setGeneratedImages] = useState({}); // { 'LinkedIn-v0-s0': 'base64...' }
     const [publishPlan, setPublishPlan] = useState('Schedule For Later');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -124,8 +125,12 @@ const CampaignModal = ({ isOpen, onClose }) => {
             setGeneratedCopy(results);
             setActivePlatform(formData.platforms[0]);
 
-            // Don't set default selections anymore
-            setSelectedVariants({});
+            // Initialize selectedVariants with the first variant for each platform
+            const initialSelections = {};
+            formData.platforms.forEach(p => {
+                initialSelections[p] = [1];
+            });
+            setSelectedVariants(initialSelections);
             setActiveVariant(1);
 
             // Auto-populate overlay headline from first selected variant
@@ -204,29 +209,42 @@ const CampaignModal = ({ isOpen, onClose }) => {
         const newImages = { ...generatedImages };
 
         try {
-            // Focus generation on the currently active platform and variant in Step 3
             const platform = activePlatform;
             const variantIdx = activeVariant - 1;
             const copy = generatedCopy[platform][variantIdx];
-            const imageKey = `${platform}-${variantIdx}`;
-
+            const selectedBrand = brands.find(b => b.name === formData.brand);
             const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-            const response = await fetch(`${apiBaseUrl}/generate-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    product_name: formData.productName,
-                    ad_copy: copy.body,
-                    brand_name: formData.brand || 'Your Brand',
-                    platform: platform,
-                    template: selectedTemplate
-                })
-            });
 
-            if (!response.ok) throw new Error(`Image API error for ${platform}`);
-            const data = await response.json();
-            newImages[imageKey] = `data:${data.mime_type};base64,${data.image}`;
-            setGeneratedImages(newImages);
+            const numSlides = postType === 'Carousel Post' ? 4 : 1;
+
+            for (let s = 0; s < numSlides; s++) {
+                const imageKey = `${platform}-${variantIdx}${numSlides > 1 ? `-slide${s}` : ''}`;
+
+                const response = await fetch(`${apiBaseUrl}/generate-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        product_name: formData.productName,
+                        ad_copy: copy.body,
+                        brand_name: formData.brand || 'Your Brand',
+                        platform: platform,
+                        template: selectedTemplate,
+                        aesthetic: selectedBrand?.aesthetic || '',
+                        brand_values: selectedBrand?.values || [],
+                        logo_url: selectedBrand?.logo_url || '',
+                        colors: selectedBrand?.colors || {},
+                        typography: selectedBrand?.typography || {},
+                        layout_pattern: selectedBrand?.layout_pattern || '',
+                        slide_number: s + 1,
+                        total_slides: numSlides
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Image API error for ${platform} slide ${s + 1}`);
+                const data = await response.json();
+                newImages[imageKey] = `data:${data.mime_type};base64,${data.image}`;
+                setGeneratedImages({ ...newImages }); // Update state incrementally for better UX
+            }
         } catch (error) {
             console.error("Visual generation failed:", error);
             const hostname = window.location.hostname;
@@ -556,13 +574,10 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                             key={v}
                                             onClick={() => {
                                                 setActiveVariant(v);
-                                                setSelectedVariants(prev => {
-                                                    const current = prev[activePlatform] || [];
-                                                    const next = current.includes(v)
-                                                        ? current.filter(id => id !== v)
-                                                        : [...current, v];
-                                                    return { ...prev, [activePlatform]: next };
-                                                });
+                                                setSelectedVariants(prev => ({
+                                                    ...prev,
+                                                    [activePlatform]: [v]
+                                                }));
                                             }}
                                             className={`px-6 py-2 text-sm font-bold rounded-xl transition-all border ${isSelected
                                                 ? 'bg-primary-50 border-primary-600 text-primary-600 shadow-sm'
@@ -590,13 +605,10 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 <p className="text-sm font-bold text-slate-900">{generatedCopy[activePlatform][activeVariant - 1]?.title}</p>
                                                 <button
                                                     onClick={() => {
-                                                        setSelectedVariants(prev => {
-                                                            const current = prev[activePlatform] || [];
-                                                            const next = current.includes(activeVariant)
-                                                                ? current.filter(id => id !== activeVariant)
-                                                                : [...current, activeVariant];
-                                                            return { ...prev, [activePlatform]: next };
-                                                        });
+                                                        setSelectedVariants(prev => ({
+                                                            ...prev,
+                                                            [activePlatform]: [activeVariant]
+                                                        }));
                                                     }}
                                                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${selectedVariants[activePlatform]?.includes(activeVariant)
                                                         ? 'bg-primary-600 text-white shadow-lg shadow-primary-200'
@@ -649,6 +661,21 @@ const CampaignModal = ({ isOpen, onClose }) => {
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                                 {/* Configuration Sidebar */}
                                 <div className="lg:col-span-4 space-y-8">
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Post Type</label>
+                                        <div className="flex gap-4 p-1 bg-slate-100 rounded-xl">
+                                            {['Single Ad', 'Carousel Post'].map(type => (
+                                                <button
+                                                    key={type}
+                                                    onClick={() => setPostType(type)}
+                                                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${postType === type ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     <div className="space-y-4">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Template</label>
                                         <div className="grid grid-cols-3 gap-3">
@@ -730,114 +757,145 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
                             {/* Previews */}
                             <div className="lg:col-span-8 space-y-8">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Asset Previews</label>
-                                    <div className="flex gap-2">
-                                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100">Ready for {activePlatform}</span>
+                                <div className="space-y-6">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Asset Previews</label>
+                                        <div className="flex gap-2">
+                                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 uppercase tracking-widest">{postType}</span>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="grid grid-cols-2 gap-8">
-                                    {/* Square Preview */}
-                                    <div className="space-y-4">
-                                        <div className="aspect-square rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
-                                            {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
-                                                <>
-                                                    <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
-                                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
-                                                        <button
-                                                            onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
-                                                            className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
-                                                        >
-                                                            <Download className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Text Overlay Card */}
-                                                    <div className="absolute right-3 bottom-3 w-40 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
-                                                        <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
-                                                        <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
-                                                            {overlayCTA}
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Logo Overlay */}
-                                                    <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
-                                                        logoPosition === 'top right' ? 'top-3 right-3' :
-                                                            logoPosition === 'bottom left' ? 'bottom-3 left-3' :
-                                                                'bottom-3 right-3'
-                                                        }`}>
-                                                        <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl border-2 border-white overflow-hidden">
-                                                            {overlayLogo ? (
-                                                                <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
+                                    {postType === 'Carousel Post' ? (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {[0, 1, 2, 3].map(s => {
+                                                const key = `${activePlatform}-${activeVariant - 1}-slide${s}`;
+                                                const img = generatedImages[key];
+                                                return (
+                                                    <div key={s} className="space-y-2">
+                                                        <div className="aspect-square rounded-xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-sm">
+                                                            {img ? (
+                                                                <>
+                                                                    <img src={img} className="w-full h-full object-cover" alt={`Slide ${s + 1}`} />
+                                                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-40">
+                                                                        <button
+                                                                            onClick={() => handleDownload(img, `${formData.productName}-slide${s + 1}.png`)}
+                                                                            className="p-1.5 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                                        >
+                                                                            <Download className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </>
                                                             ) : (
-                                                                <Sparkles className="text-primary-600 w-6 h-6" />
+                                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 opacity-30">
+                                                                    <Loader2 className={`w-6 h-6 text-slate-400 ${isGeneratingImage ? 'animate-spin' : ''}`} />
+                                                                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">Slide {s + 1}</span>
+                                                                </div>
                                                             )}
                                                         </div>
+                                                        <p className="text-[8px] font-bold text-slate-400 text-center uppercase tracking-widest leading-none">Slide {s + 1}</p>
                                                     </div>
-                                                </>
-                                            ) : (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
-                                                    <ImageIcon className="w-12 h-12 text-slate-400" />
-                                                    <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Square Asset</span>
-                                                </div>
-                                            )}
+                                                );
+                                            })}
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Square (1:1)</p>
-                                    </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-8">
+                                            {/* Square Preview */}
+                                            <div className="space-y-4">
+                                                <div className="aspect-square rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
+                                                    {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                        <>
+                                                            <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
+                                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
+                                                                <button
+                                                                    onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
+                                                                    className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                                >
+                                                                    <Download className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
 
-                                    {/* Landscape Preview */}
-                                    <div className="space-y-4">
-                                        <div className="aspect-video rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
-                                            {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
-                                                <>
-                                                    <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
-                                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
-                                                        <button
-                                                            onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`, false)}
-                                                            className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
-                                                        >
-                                                            <Download className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
+                                                            {/* Text Overlay Card */}
+                                                            <div className="absolute right-3 bottom-3 w-40 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
+                                                                <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
+                                                                <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
+                                                                    {overlayCTA}
+                                                                </button>
+                                                            </div>
 
-                                                    {/* Text Overlay Card */}
-                                                    <div className="absolute right-3 bottom-3 w-48 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
-                                                        <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
-                                                        <button className="mt-2 px-4 py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
-                                                            {overlayCTA}
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Logo Overlay */}
-                                                    <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
-                                                        logoPosition === 'top right' ? 'top-3 right-3' :
-                                                            logoPosition === 'bottom left' ? 'bottom-3 left-3' :
-                                                                'bottom-3 right-3'
-                                                        }`}>
-                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
-                                                            {overlayLogo ? (
-                                                                <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
-                                                            ) : (
-                                                                <Sparkles className="text-primary-600 w-4 h-4" />
-                                                            )}
+                                                            {/* Logo Overlay */}
+                                                            <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
+                                                                logoPosition === 'top right' ? 'top-3 right-3' :
+                                                                    logoPosition === 'bottom left' ? 'bottom-3 left-3' :
+                                                                        'bottom-3 right-3'
+                                                                }`}>
+                                                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-xl border-2 border-white overflow-hidden">
+                                                                    {overlayLogo ? (
+                                                                        <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
+                                                                    ) : (
+                                                                        <Sparkles className="text-primary-600 w-6 h-6" />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
+                                                            <ImageIcon className="w-12 h-12 text-slate-400" />
+                                                            <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Square Asset</span>
                                                         </div>
-                                                    </div>
-                                                </>
-                                            ) : (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
-                                                    <ImageIcon className="w-12 h-12 text-slate-400" />
-                                                    <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Landscape</span>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                        <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Landscape (16:9)</p>
+                                                <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Square (1:1)</p>
+                                            </div>
 
-                                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Selected Hook</p>
-                                            <p className="text-xs font-bold text-slate-800 italic">"{generatedCopy[activePlatform][activeVariant - 1]?.title}"</p>
+                                            {/* Landscape Preview */}
+                                            <div className="space-y-4">
+                                                <div className="aspect-video rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden relative group shadow-inner">
+                                                    {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
+                                                        <>
+                                                            <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
+                                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
+                                                                <button
+                                                                    onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`, false)}
+                                                                    className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
+                                                                >
+                                                                    <Download className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Text Overlay Card */}
+                                                            <div className="absolute right-3 bottom-3 w-48 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
+                                                                <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
+                                                                <button className="mt-2 px-4 py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
+                                                                    {overlayCTA}
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Logo Overlay */}
+                                                            <div className={`absolute p-2 z-50 transition-all duration-300 ${logoPosition === 'top left' ? 'top-3 left-3' :
+                                                                logoPosition === 'top right' ? 'top-3 right-3' :
+                                                                    logoPosition === 'bottom left' ? 'bottom-3 left-3' :
+                                                                        'bottom-3 right-3'
+                                                                }`}>
+                                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-xl border border-slate-100 overflow-hidden">
+                                                                    {overlayLogo ? (
+                                                                        <img src={overlayLogo} className="w-full h-full object-contain" alt="Logo" />
+                                                                    ) : (
+                                                                        <Sparkles className="text-primary-600 w-4 h-4" />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 opacity-30">
+                                                            <ImageIcon className="w-12 h-12 text-slate-400" />
+                                                            <span className="text-xs font-bold text-slate-500 tracking-widest uppercase">Landscape</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-[10px] font-bold text-slate-400 text-center uppercase tracking-widest">Landscape (16:9)</p>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
