@@ -4,20 +4,26 @@ import { supabase } from '../lib/supabase';
 
 const ScheduleModal = ({ isOpen, onClose, campaign, platform, onSchedule }) => {
     const [scheduledDate, setScheduledDate] = useState('');
-    const [scheduledTime, setScheduledTime] = useState('');
+    const [timeHour, setTimeHour] = useState('10');
+    const [timeMinute, setTimeMinute] = useState('00');
+    const [timePeriod, setTimePeriod] = useState('AM');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     if (!isOpen || !campaign) return null;
 
     const handleSchedule = async () => {
-        if (!scheduledDate || !scheduledTime) {
-            alert('Please select both date and time.');
+        if (!scheduledDate) {
+            alert('Please select a date.');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString();
+            let hour24 = parseInt(timeHour, 10);
+            if (timePeriod === 'PM' && hour24 !== 12) hour24 += 12;
+            if (timePeriod === 'AM' && hour24 === 12) hour24 = 0;
+            const timeStr = `${hour24.toString().padStart(2, '0')}:${timeMinute}:00`;
+            const scheduledAt = new Date(`${scheduledDate}T${timeStr}`).toISOString();
             const existingSchedules = campaign.schedules || {};
 
             const updatedSchedules = {
@@ -131,19 +137,50 @@ const ScheduleModal = ({ isOpen, onClose, campaign, platform, onSchedule }) => {
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Publish Time</label>
-                                    <input
-                                        type="time"
-                                        value={scheduledTime}
-                                        onChange={(e) => setScheduledTime(e.target.value)}
-                                        className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none"
-                                    />
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={timeHour}
+                                            onChange={(e) => setTimeHour(e.target.value)}
+                                            className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none appearance-none text-center cursor-pointer"
+                                        >
+                                            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                                                <option key={h} value={h.toString().padStart(2, '0')}>{h.toString().padStart(2, '0')}</option>
+                                            ))}
+                                        </select>
+                                        <span className="flex items-center text-slate-400 font-bold">:</span>
+                                        <select
+                                            value={timeMinute}
+                                            onChange={(e) => setTimeMinute(e.target.value)}
+                                            className="w-full p-4 bg-slate-50 border-none rounded-2xl text-sm font-bold focus:ring-2 focus:ring-primary-500 outline-none appearance-none text-center cursor-pointer"
+                                        >
+                                            {Array.from({ length: 60 }, (_, i) => i).map(m => (
+                                                <option key={m} value={m.toString().padStart(2, '0')}>{m.toString().padStart(2, '0')}</option>
+                                            ))}
+                                        </select>
+                                        <div className="flex bg-slate-50 rounded-2xl p-1 w-full relative h-[52px]">
+                                            <div className="flex w-full absolute inset-1 z-10 transition-all font-bold text-sm">
+                                                <button
+                                                    onClick={() => setTimePeriod('AM')}
+                                                    className={`w-1/2 h-full rounded-xl flex items-center justify-center transition-all ${timePeriod === 'AM' ? 'bg-primary-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                                                >
+                                                    AM
+                                                </button>
+                                                <button
+                                                    onClick={() => setTimePeriod('PM')}
+                                                    className={`w-1/2 h-full rounded-xl flex items-center justify-center transition-all ${timePeriod === 'PM' ? 'bg-primary-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                                                >
+                                                    PM
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="mt-auto w-full pt-8">
                                 <button
                                     onClick={handleSchedule}
-                                    disabled={isSubmitting || !scheduledDate || !scheduledTime}
+                                    disabled={isSubmitting || !scheduledDate}
                                     className="w-full py-4 bg-primary-600 text-white font-black rounded-2xl shadow-xl shadow-primary-100 hover:bg-primary-700 transition-all disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2"
                                 >
                                     {isSubmitting ? (

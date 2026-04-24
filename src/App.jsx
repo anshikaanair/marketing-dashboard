@@ -8,6 +8,8 @@ import Brands from './pages/Brands';
 import CreateBrand from './pages/CreateBrand';
 import Approvals from './pages/Approvals';
 import Schedule from './pages/Schedule';
+import SocialAccounts from './pages/SocialAccounts';
+import SocialCallback from './pages/SocialCallback';
 import DashboardLayout from './layouts/DashboardLayout';
 
 const ProtectedRoute = ({ children }) => {
@@ -53,6 +55,26 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <DashboardLayout>
               <Campaigns />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/social-accounts"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SocialAccounts />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/social-accounts/callback"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SocialCallback />
             </DashboardLayout>
           </ProtectedRoute>
         }

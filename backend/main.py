@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import os
 import mimetypes
 import base64
@@ -16,6 +17,7 @@ from bs4 import BeautifulSoup
 
 from urllib.parse import urljoin
 import re
+import traceback
 
 async def scrape_website(url: str):
     try:
@@ -257,6 +259,207 @@ async def generate_image(request: ImageRequest):
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+class MetaConnectRequest(BaseModel):
+    code: str
+    redirect_uri: str
+    user_id: str
+
+@app.post("/social/meta/connect")
+async def connect_meta(request: MetaConnectRequest):
+    try:
+        # Load keys from environment
+        app_id = os.getenv("META_APP_ID")
+        app_secret = os.getenv("META_APP_SECRET")
+        
+        if not app_id or not app_secret:
+            raise HTTPException(status_code=500, detail="Meta App credentials not configured on backend.")
+
+        async with httpx.AsyncClient() as client:
+            # 1. Exchange code for short-lived access token
+            token_url = f"https://graph.facebook.com/v19.0/oauth/access_token?client_id={app_id}&redirect_uri={request.redirect_uri}&client_secret={app_secret}&code={request.code}"
+            token_res = await client.get(token_url)
+            token_data = token_res.json()
+            
+            if "error" in token_data:
+                print("Token Error:", token_data)
+                raise HTTPException(status_code=400, detail=f"Meta Error: {token_data['error']['message']}")
+                
+            short_lived_token = token_data["access_token"]
+            
+            # 2. Exchange for long-lived token
+            ll_url = f"https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id={app_id}&client_secret={app_secret}&fb_exchange_token={short_lived_token}"
+            ll_res = await client.get(ll_url)
+            ll_data = ll_res.json()
+            
+            if "error" in ll_data:
+                raise HTTPException(status_code=400, detail="Failed to get long-lived token")
+                
+            long_lived_token = ll_data["access_token"]
+            
+            # 3. Get user's managed Pages
+            pages_url = f"https://graph.facebook.com/v19.0/me/accounts?access_token={long_lived_token}"
+            pages_res = await client.get(pages_url)
+            pages_data = pages_res.json()
+            
+            if "error" in pages_data:
+                raise HTTPException(status_code=400, detail="Failed to fetch pages")
+                
+            pages = pages_data.get("data", [])
+            extracted_accounts = []
+            
+            for page in pages:
+                # Add Facebook Page
+                page_token = page["access_token"] # Page specific token
+                page_id = page["id"]
+                page_name = page["name"]
+                
+                extracted_accounts.append({
+                    "platform": "Facebook",
+                    "account_name": page_name,
+                    "account_id": page_id,
+                    "access_token": page_token
+                })
+                
+                # Check for linked Instagram Account
+                ig_url = f"https://graph.facebook.com/v19.0/{page_id}?fields=instagram_business_account&access_token={page_token}"
+                ig_res = await client.get(ig_url)
+                ig_data = ig_res.json()
+                
+                if "instagram_business_account" in ig_data:
+                    ig_id = ig_data["instagram_business_account"]["id"]
+                    
+                    # Fetch IG username
+                    ig_info_url = f"https://graph.facebook.com/v19.0/{ig_id}?fields=username&access_token={page_token}"
+                    ig_info_res = await client.get(ig_info_url)
+                    ig_username = ig_info_res.json().get("username", "Instagram Account")
+                    
+                    extracted_accounts.append({
+                        "platform": "Instagram",
+                        "account_name": ig_username,
+                        "account_id": ig_id,
+                        "access_token": page_token # Uses the FB Page token mathematically
+                    })
+                    
+            return {"status": "success", "accounts": extracted_accounts}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Meta Connect Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error connecting to Meta")
+
+class PublishRequest(BaseModel):
+    page_id: str
+    access_token: str
+    message: str
+    image_base64: Optional[str] = None
+    platform: str = "Facebook"
+
+@app.post("/social/publish")
+async def publish_social(request: PublishRequest):
+    try:
+        msg_preview = (request.message[:50] + "...") if request.message else "None"
+        img_preview = (request.image_base64[:50] + "...") if request.image_base64 else "None"
+        print(f"DEBUG: Publishing to {request.platform} (ID: {request.page_id})\n  Msg: {msg_preview}\n  Img: {img_preview}")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            if request.platform == "Facebook":
+                if request.image_base64:
+                    url = f"https://graph.facebook.com/v19.0/{request.page_id}/photos"
+                    data_parts = request.image_base64.split("base64,")
+                    img_data = base64.b64decode(data_parts[1] if len(data_parts) > 1 else data_parts[0])
+                    
+                    files = {
+                        "source": ("image.png", img_data, "image/png")
+                    }
+                    data = {
+                        "message": request.message,
+                        "access_token": request.access_token
+                    }
+                    res = await client.post(url, data=data, files=files)
+                else:
+                    url = f"https://graph.facebook.com/v19.0/{request.page_id}/feed"
+                    data = {
+                        "message": request.message,
+                        "access_token": request.access_token
+                    }
+                    res = await client.post(url, data=data)
+                    
+                res_data = res.json()
+                if "error" in res_data:
+                    raise HTTPException(status_code=400, detail=res_data["error"]["message"])
+                    
+                return {"status": "success", "post_id": res_data.get("post_id") or res_data.get("id")}
+                
+            elif request.platform == "Instagram":
+                # Instagram requires a public URL. We'll use the FB Page to host it as an unpublished photo.
+                # 1. Get the Facebook Page ID associated with this token
+                me_res = await client.get(f"https://graph.facebook.com/v19.0/me?access_token={request.access_token}")
+                fb_page_id = me_res.json().get("id")
+                
+                if not fb_page_id:
+                    raise HTTPException(status_code=400, detail="Could not resolve Facebook Page for Instagram hosting.")
+
+                # 2. Upload to FB Page as unpublished
+                if not request.image_base64:
+                    raise HTTPException(status_code=400, detail="Instagram requires an image for posting. Please ensure visuals are generated for this campaign.")
+
+                data_parts = request.image_base64.split("base64,")
+                img_data = base64.b64decode(data_parts[1] if len(data_parts) > 1 else data_parts[0])
+                
+                files = {"source": ("image.png", img_data, "image/png")}
+                fb_data = {"published": "false", "access_token": request.access_token}
+                fb_res = await client.post(f"https://graph.facebook.com/v19.0/{fb_page_id}/photos", data=fb_data, files=files)
+                photo_id = fb_res.json().get("id")
+
+                if not photo_id:
+                    fb_err = fb_res.json().get("error", {}).get("message", "Unknown FB Error")
+                    raise HTTPException(status_code=400, detail=f"Failed to host image on FB: {fb_err}")
+
+                # 3. Get the CDN URL of the uploaded image
+                url_res = await client.get(f"https://graph.facebook.com/v19.0/{photo_id}?fields=images&access_token={request.access_token}")
+                image_urls = url_res.json().get("images", [])
+                if not image_urls:
+                    raise HTTPException(status_code=400, detail="Failed to retrieve hosted image URL.")
+                public_url = image_urls[0]["source"]
+
+                # 4. Create Instagram Media Container
+                ig_container_url = f"https://graph.facebook.com/v19.0/{request.page_id}/media"
+                ig_data = {
+                    "image_url": public_url,
+                    "caption": request.message,
+                    "access_token": request.access_token
+                }
+                ig_res = await client.post(ig_container_url, data=ig_data)
+                creation_id = ig_res.json().get("id")
+
+                if not creation_id:
+                    ig_err = ig_res.json().get("error", {}).get("message", "Unknown IG Error")
+                    raise HTTPException(status_code=400, detail=f"Instagram Media Error: {ig_err}")
+
+                # 5. Publish the container
+                ig_publish_url = f"https://graph.facebook.com/v19.0/{request.page_id}/media_publish"
+                publish_data = {
+                    "creation_id": creation_id,
+                    "access_token": request.access_token
+                }
+                publish_res = await client.post(ig_publish_url, data=publish_data)
+                result = publish_res.json()
+
+                if "error" in result:
+                    raise HTTPException(status_code=400, detail=result["error"]["message"])
+
+                return {"status": "success", "post_id": result.get("id"), "note": "Posted to Instagram via FB CDN workaround"}
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported platform")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("Publishing Traceback:")
+        traceback.print_exc()
+        print(f"Publish Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Backend Error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

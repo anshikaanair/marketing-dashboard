@@ -10,12 +10,24 @@ const Schedule = () => {
     const [loading, setLoading] = useState(true);
     const [selectedEntry, setSelectedEntry] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [socialAccounts, setSocialAccounts] = useState([]);
+    const [isPublishing, setIsPublishing] = useState(null);
 
     useEffect(() => {
         if (user) {
             fetchApprovedCampaigns();
+            fetchSocialAccounts();
         }
     }, [user]);
+
+    const fetchSocialAccounts = async () => {
+        try {
+            const { data } = await supabase.from('social_accounts').select('*').eq('status', 'Connected');
+            setSocialAccounts(data || []);
+        } catch (error) {
+            console.error('Error fetching social accounts:', error);
+        }
+    };
 
     const fetchApprovedCampaigns = async () => {
         setLoading(true);
@@ -61,6 +73,107 @@ const Schedule = () => {
             minute: '2-digit',
             hour12: true
         });
+    };
+
+    const handlePublish = async (e, row) => {
+        e.stopPropagation();
+        // Try to match the account name with the campaign brand name for better precision
+        const account = socialAccounts.find(a =>
+            a.platform === row.platform &&
+            (row.campaign.brand && a.account_name.toLowerCase().includes(row.campaign.brand.toLowerCase()))
+        ) || socialAccounts.find(a => a.platform === row.platform);
+
+        if (!account) {
+            alert(`Please connect a ${row.platform} account for "${row.campaign.brand}" in the Social Accounts page first.`);
+            return;
+        }
+
+        setIsPublishing(row.id);
+
+        try {
+            // Get the actual selected variant index for this platform
+            const selectedVariantNums = row.campaign.selected_variants?.[row.platform] || [1];
+            const variantIdx = selectedVariantNums[0] - 1; // 0-based index
+
+            const adCopy = row.campaign.generated_copy?.[row.platform]?.[variantIdx]?.body || row.campaign.description;
+
+            // Handle both single images and carousels (pick the first image/slide)
+            const images = row.campaign.generated_images || {};
+
+            // Case-insensitive lookup for platform keys (handles "Instagram" vs "INSTAGRAM")
+            const getPlatformImage = (platform, vIdx) => {
+                const keys = Object.keys(images);
+                const searchBase = `${platform}-${vIdx}`.toLowerCase();
+                const foundKey = keys.find(k => {
+                    const lk = k.toLowerCase();
+                    return lk === searchBase ||
+                        lk === `${searchBase}-slide0` ||
+                        lk === `${searchBase}-slide1` ||
+                        lk === `${searchBase}-slide2` ||
+                        lk === `${searchBase}-slide3`;
+                });
+                return foundKey ? images[foundKey] : null;
+            };
+
+            let imageBase64 = getPlatformImage(row.platform, variantIdx);
+
+            // Fallback: If no platform-specific image found, try any image from the same campaign
+            if (!imageBase64 && Object.keys(images).length > 0) {
+                console.log("Debug Publishing - Specific image not found, using first available image as fallback");
+                imageBase64 = Object.values(images)[0];
+            }
+
+            console.log("Debug Publishing - Targeting:", row.platform, "VariantIdx:", variantIdx, "Found image:", imageBase64 ? "YES" : "NO");
+
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/social/publish`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    page_id: account.account_id,
+                    access_token: account.access_token,
+                    message: adCopy,
+                    image_base64: imageBase64,
+                    platform: row.platform
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.detail || 'Failed to publish');
+
+            // Update status in campaigns.schedules
+            const updatedSchedules = {
+                ...row.campaign.schedules,
+                [row.platform]: {
+                    ...row.campaign.schedules[row.platform],
+                    status: 'Posted',
+                    post_id: data.post_id
+                }
+            };
+
+            await supabase
+                .from('campaigns')
+                .update({ schedules: updatedSchedules })
+                .eq('id', row.campaign.id);
+
+            alert(`Successfully posted to ${row.platform}!`);
+            fetchApprovedCampaigns();
+        } catch (error) {
+            console.error("Publish error:", error);
+
+            const updatedSchedules = {
+                ...row.campaign.schedules,
+                [row.platform]: {
+                    ...row.campaign.schedules[row.platform],
+                    status: 'Failed',
+                    error: error.message
+                }
+            };
+            await supabase.from('campaigns').update({ schedules: updatedSchedules }).eq('id', row.campaign.id);
+            alert(`Failed to post: ${error.message}`);
+            fetchApprovedCampaigns();
+        } finally {
+            setIsPublishing(null);
+        }
     };
 
     return (
@@ -138,12 +251,21 @@ const Schedule = () => {
                                                 row.schedule.status === 'Failed' ? 'bg-rose-50 text-rose-600 border-rose-100' :
                                                     'bg-orange-50 text-orange-600 border-orange-100'
                                                 }`}>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${row.schedule.status === 'Scheduled' ? 'bg-emerald-500' :
+                                                <div className={`w-1.5 h-1.5 rounded-full ${row.schedule.status === 'Posted' ? 'bg-indigo-500' : row.schedule.status === 'Scheduled' ? 'bg-emerald-500' :
                                                     row.schedule.status === 'Failed' ? 'bg-rose-500' :
                                                         'bg-orange-500'
                                                     }`} />
                                                 {row.schedule.status}
                                             </span>
+                                            {row.schedule.status === 'Scheduled' && (
+                                                <button
+                                                    onClick={(e) => handlePublish(e, row)}
+                                                    disabled={isPublishing === row.id}
+                                                    className="ml-3 px-3 py-1 bg-primary-600 text-white rounded text-xs font-bold shadow hover:bg-primary-700 transition flex items-center gap-1 disabled:opacity-50"
+                                                >
+                                                    {isPublishing === row.id ? 'Sending...' : 'Post Now'}
+                                                </button>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
