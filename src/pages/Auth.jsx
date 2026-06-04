@@ -27,13 +27,13 @@ const Auth = () => {
                     }
                 });
                 if (error) throw error;
-                alert('Check your email for the confirmation link!');
+                alert('Sign up successful! Welcome.');
             } else {
                 const { error } = await signIn({ email, password });
                 if (error) throw error;
             }
         } catch (err) {
-            setError(err.message);
+            setError(err.message || 'Something went wrong. Please try again.');
         } finally {
             setLoading(false);
         }

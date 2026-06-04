@@ -55,7 +55,12 @@ const Schedule = () => {
     // Flatten campaigns into platform rows
     const scheduleRows = campaigns.flatMap(campaign => {
         const platforms = campaign.platforms || [];
-        return platforms.map(platform => ({
+        const images = campaign.generated_images || {};
+        const activePlatforms = platforms.filter(platform => {
+            const prefix = platform.toLowerCase();
+            return Object.keys(images).some(key => key.toLowerCase().startsWith(prefix));
+        });
+        return activePlatforms.map(platform => ({
             id: `${campaign.id}-${platform}`,
             campaign,
             platform,
@@ -138,13 +143,17 @@ const Schedule = () => {
             });
 
             const data = await response.json();
-            if (!response.ok) throw new Error(data.detail || 'Failed to publish');
+            if (!response.ok) {
+                const errMsg = typeof data.detail === 'object' ? JSON.stringify(data.detail) : (data.detail || 'Failed to publish');
+                throw new Error(errMsg);
+            }
 
             // Update status in campaigns.schedules
+            const existingSchedules = row.campaign.schedules || {};
             const updatedSchedules = {
-                ...row.campaign.schedules,
+                ...existingSchedules,
                 [row.platform]: {
-                    ...row.campaign.schedules[row.platform],
+                    ...(existingSchedules[row.platform] || {}),
                     status: 'Posted',
                     post_id: data.post_id
                 }
@@ -160,10 +169,11 @@ const Schedule = () => {
         } catch (error) {
             console.error("Publish error:", error);
 
+            const existingSchedulesOnErr = row.campaign.schedules || {};
             const updatedSchedules = {
-                ...row.campaign.schedules,
+                ...existingSchedulesOnErr,
                 [row.platform]: {
-                    ...row.campaign.schedules[row.platform],
+                    ...(existingSchedulesOnErr[row.platform] || {}),
                     status: 'Failed',
                     error: error.message
                 }

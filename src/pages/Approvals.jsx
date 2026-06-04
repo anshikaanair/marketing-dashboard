@@ -6,6 +6,12 @@ import CampaignDetailModal from '../components/CampaignDetailModal';
 
 const ADMIN_EMAIL = 'anshika.nair@10xds.com';
 
+const getSubmittedBy = (campaign) => {
+    if (!campaign) return '';
+    const rawName = campaign.user_name || campaign.displayName || campaign.auth_users?.email?.split('@')[0] || campaign.user_email?.split('@')[0] || 'anshika';
+    return rawName.split('.')[0];
+};
+
 const Approvals = () => {
     const { user } = useAuth();
     const [campaigns, setCampaigns] = useState([]);
@@ -52,9 +58,26 @@ const Approvals = () => {
         if (!selectedCampaign) return;
         setIsSubmitting(true);
         try {
+            let updatedComments = selectedCampaign.comments || [];
+            if (commentText.trim()) {
+                const newComment = {
+                    id: crypto.randomUUID(),
+                    user_name: user.email.split('@')[0],
+                    user_email: user.email,
+                    text: commentText.trim(),
+                    created_at: new Date().toISOString()
+                };
+                updatedComments = [...updatedComments, newComment];
+            }
+
+            const updateData = { status: newStatus };
+            if (commentText.trim()) {
+                updateData.comments = updatedComments;
+            }
+
             const { error } = await supabase
                 .from('campaigns')
-                .update({ status: newStatus })
+                .update(updateData)
                 .eq('id', selectedCampaign.id);
 
             if (error) throw error;
@@ -69,10 +92,11 @@ const Approvals = () => {
 
             // Update local state
             const updatedCampaigns = campaigns.map(c =>
-                c.id === selectedCampaign.id ? { ...c, status: newStatus } : c
+                c.id === selectedCampaign.id ? { ...c, status: newStatus, comments: updatedComments } : c
             );
             setCampaigns(updatedCampaigns);
-            setSelectedCampaign({ ...selectedCampaign, status: newStatus });
+            setSelectedCampaign({ ...selectedCampaign, status: newStatus, comments: updatedComments });
+            setCommentText('');
 
         } catch (error) {
             console.error(`Error updating to ${newStatus}:`, error);
@@ -205,11 +229,15 @@ const Approvals = () => {
                                     </div>
                                     <div className="space-y-1.5 mt-3 text-xs text-slate-500 font-medium">
                                         <p>Brand: <span className="text-slate-700">{campaign.brand}</span></p>
-                                        {/* Fallback to unknown if auth_users fetch failed somehow */}
-                                        <p>Submitted by: <span className="text-slate-700">{campaign.auth_users?.email || 'Unknown User'}</span></p>
+                                        <p>Submitted by: <span className="text-slate-700">{getSubmittedBy(campaign)}</span></p>
                                         <div className="flex items-center gap-1.5 pt-1 text-[11px] text-slate-400">
                                             <Clock className="w-3.5 h-3.5" />
-                                            {new Date(campaign.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                                            {(() => {
+                                                const d = new Date(campaign.created_at);
+                                                return isNaN(d.getTime())
+                                                    ? new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                                                    : d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -230,7 +258,7 @@ const Approvals = () => {
                                             {selectedCampaign.product_name} — {selectedCampaign.brand}
                                         </h3>
                                         <p className="text-sm text-slate-500 font-medium">
-                                            {selectedCampaign.brand} <span className="mx-2">•</span> Submitted by {selectedCampaign.auth_users?.email?.split('@')[0] || 'Unknown'}
+                                            {selectedCampaign.brand} <span className="mx-2">•</span> Submitted by {getSubmittedBy(selectedCampaign)}
                                         </p>
                                     </div>
                                     <button
@@ -253,7 +281,15 @@ const Approvals = () => {
                                     <div>
                                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Platforms</p>
                                         <p className="text-sm font-bold text-slate-800">
-                                            {Array.isArray(selectedCampaign.platforms) ? selectedCampaign.platforms.join(', ') : 'Not specified'}
+                                            {(() => {
+                                                const platforms = selectedCampaign.platforms || [];
+                                                const images = selectedCampaign.generated_images || {};
+                                                const activePlatforms = platforms.filter(platform => {
+                                                    const prefix = platform.toLowerCase();
+                                                    return Object.keys(images).some(key => key.toLowerCase().startsWith(prefix));
+                                                });
+                                                return activePlatforms.length > 0 ? activePlatforms.join(', ') : 'Not specified';
+                                            })()}
                                         </p>
                                     </div>
                                 </div>

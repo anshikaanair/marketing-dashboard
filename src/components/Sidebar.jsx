@@ -6,8 +6,6 @@ import {
     Calendar,
     Layers,
     Users,
-    FileText,
-    Settings,
     HelpCircle,
     LogOut,
     Layout
@@ -65,9 +63,6 @@ const Sidebar = () => {
                     <SidebarItem icon={Calendar} label="Schedule" href="/schedule" active={location.pathname === '/schedule'} />
                     <SidebarItem icon={Layers} label="Brands" href="/brands" active={location.pathname === '/brands'} />
                     <SidebarItem icon={Users} label="Social Accounts" href="/social-accounts" active={location.pathname === '/social-accounts'} />
-                    <SidebarItem icon={FileText} label="Audit Logs" href="/audit-logs" active={location.pathname === '/audit-logs'} />
-                    <SidebarItem icon={Users} label="Users" href="/users" active={location.pathname === '/users'} />
-                    <SidebarItem icon={Settings} label="Settings" href="/settings" active={location.pathname === '/settings'} />
                 </nav>
             </div>
 

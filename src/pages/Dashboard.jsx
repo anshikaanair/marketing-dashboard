@@ -212,7 +212,12 @@ const Dashboard = () => {
                                 <ActivityItem
                                     key={c.id}
                                     title={`${c.product_name} — ${c.objective}`}
-                                    time={`${c.brand} • ${new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}`}
+                                    time={`${c.brand} • ${(() => {
+                                        const d = new Date(c.created_at);
+                                        return isNaN(d.getTime()) 
+                                            ? new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })
+                                            : d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                                    })()}`}
                                     type="campaign"
                                     status={c.status}
                                     onClick={() => handleCampaignClick(c)}
@@ -257,7 +262,12 @@ const Dashboard = () => {
                                             </span>
                                         </p>
                                         <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-widest">
-                                            {new Date(a.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            {(() => {
+                                                const d = new Date(a.created_at);
+                                                return isNaN(d.getTime()) 
+                                                    ? new Date().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                    : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                            })()}
                                         </p>
                                     </div>
                                 </div>

@@ -5,3 +5,5 @@ python-dotenv
 pydantic
 httpx
 beautifulsoup4
+google-cloud-firestore
+google-cloud-storage

@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
     Megaphone,
-    Search,
-    Filter,
     Plus,
     MoreHorizontal,
-    ChevronDown,
     Linkedin,
     Instagram,
     Facebook,
@@ -96,33 +93,6 @@ const Campaigns = () => {
             </div>
 
             <div className="space-y-4">
-                {/* Search and Filters */}
-                <div className="flex gap-4">
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                        <input
-                            type="text"
-                            placeholder="Search campaigns..."
-                            className="w-full pl-12 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-primary-100 focus:border-primary-600 transition-all outline-none"
-                        />
-                    </div>
-                    <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-4 py-2 bg-white text-slate-600 hover:bg-slate-50 cursor-pointer transition-colors">
-                        <Filter className="w-4 h-4" />
-                        <span className="text-sm font-semibold">Filter:</span>
-                        <div className="flex items-center gap-4 ml-2">
-                            <div className="flex items-center gap-1 text-slate-900 font-bold text-sm">
-                                All Brands <ChevronDown className="w-4 h-4 text-slate-400" />
-                            </div>
-                            <div className="flex items-center gap-1 text-slate-900 font-bold text-sm">
-                                All Statuses <ChevronDown className="w-4 h-4 text-slate-400" />
-                            </div>
-                            <div className="flex items-center gap-1 text-slate-900 font-bold text-sm">
-                                All Platforms <ChevronDown className="w-4 h-4 text-slate-400" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Table */}
                 <div className="card p-0 overflow-hidden shadow-sm border-slate-100">
                     <table className="w-full text-left border-collapse">
@@ -133,14 +103,13 @@ const Campaigns = () => {
                                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Platforms</th>
                                 <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Updated</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Next Scheduled</th>
                                 <th className="px-6 py-4 w-10"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {loading ? (
                                 <tr>
-                                    <td colSpan="7" className="py-20 text-center">
+                                    <td colSpan="6" className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 text-slate-400 font-black tracking-widest uppercase">
                                             <Loader2 className="w-8 h-8 animate-spin" />
                                             <p className="text-[10px]">Loading Campaigns...</p>
@@ -159,7 +128,7 @@ const Campaigns = () => {
                                                 {c.product_name} — {c.objective}
                                             </p>
                                             <p className="text-[10px] text-slate-400 mt-1.5 font-bold uppercase tracking-widest">
-                                                by {userName}
+                                                by {(c.user_name || c.user_email?.split('@')[0] || userName).split('.')[0]}
                                             </p>
                                         </td>
                                         <td className="px-6 py-5">
@@ -182,10 +151,12 @@ const Campaigns = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-5 text-sm text-slate-500 font-bold uppercase tracking-tight">
-                                            {new Date(c.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                                        </td>
-                                        <td className="px-6 py-5 text-sm text-slate-300 font-bold uppercase tracking-widest">
-                                            {c.publish_plan === 'Schedule For Later' ? 'Pending' : '—'}
+                                            {(() => {
+                                                const d = new Date(c.created_at);
+                                                return isNaN(d.getTime()) 
+                                                    ? new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                                                    : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                                            })()}
                                         </td>
                                         <td className="px-6 py-5 text-right">
                                             <button className="text-slate-300 hover:text-slate-600 transition-colors">
@@ -196,7 +167,7 @@ const Campaigns = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="7" className="py-20 text-center">
+                                    <td colSpan="6" className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 text-slate-300 uppercase tracking-widest">
                                             <Megaphone className="w-12 h-12" />
                                             <p className="text-xs font-bold">No Campaigns Found</p>

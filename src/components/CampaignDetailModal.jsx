@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
     const [activeTab, setActiveTab] = useState('Overview');
     const { user } = useAuth();
-    const userName = user?.email?.split('@')[0] || 'User';
+    const userName = (campaign?.user_name || campaign?.user_email?.split('@')[0] || user?.displayName || user?.email?.split('@')[0] || 'User').split('.')[0];
 
     if (!isOpen || !campaign) return null;
 
@@ -52,14 +52,21 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                     <div className="space-y-2">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Platforms</p>
                         <div className="flex flex-wrap gap-2">
-                            {(campaign.platforms || []).map(p => (
-                                <span key={p} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${p === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                    p === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
-                                        'bg-indigo-50 text-indigo-600 border-indigo-100'
-                                    }`}>
-                                    {p}
-                                </span>
-                            ))}
+                            {(() => {
+                                const platforms = campaign.platforms || [];
+                                const images = campaign.generated_images || {};
+                                return platforms.filter(platform => {
+                                    const prefix = platform.toLowerCase();
+                                    return Object.keys(images).some(key => key.toLowerCase().startsWith(prefix));
+                                }).map(p => (
+                                    <span key={p} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${p === 'LinkedIn' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                        p === 'Instagram' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                            'bg-indigo-50 text-indigo-600 border-indigo-100'
+                                        }`}>
+                                        {p}
+                                    </span>
+                                ));
+                            })()}
                         </div>
                     </div>
                 </div>
@@ -75,7 +82,14 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Created</p>
-                                <p className="text-sm font-bold text-slate-900">{new Date(campaign.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                <p className="text-sm font-bold text-slate-900">
+                                    {(() => {
+                                        const d = new Date(campaign.created_at);
+                                        return isNaN(d.getTime())
+                                            ? new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                                            : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                                    })()}
+                                </p>
                             </div>
                         </div>
                         <div className="flex gap-4">
@@ -84,23 +98,16 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Last Updated</p>
-                                <p className="text-sm font-bold text-slate-900">{new Date(campaign.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                <p className="text-sm font-bold text-slate-900">
+                                    {(() => {
+                                        const d = new Date(campaign.updated_at || campaign.created_at);
+                                        return isNaN(d.getTime())
+                                            ? new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                                            : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                                    })()}
+                                </p>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div className="card p-6 border-slate-100 shadow-sm space-y-6">
-                    <h4 className="text-sm font-bold text-slate-900">Quick Actions</h4>
-                    <div className="space-y-3">
-                        <button className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-slate-200 transition-all text-sm font-semibold text-slate-700 bg-white group">
-                            Submit for Approval
-                            <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-primary-600 transition-colors" />
-                        </button>
-                        <button className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-slate-200 transition-all text-sm font-semibold text-slate-700 bg-white group">
-                            Schedule Posts
-                            <ExternalLink className="w-4 h-4 text-slate-300 group-hover:text-primary-600 transition-colors" />
-                        </button>
                     </div>
                 </div>
             </div>
@@ -233,10 +240,6 @@ const CampaignDetailModal = ({ isOpen, onClose, campaign }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-100 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
-                            <History className="w-4 h-4" />
-                            Duplicate
-                        </button>
                         <button onClick={onClose} className="p-2.5 hover:bg-slate-100 rounded-xl transition-colors">
                             <X className="w-6 h-6 text-slate-400" />
                         </button>

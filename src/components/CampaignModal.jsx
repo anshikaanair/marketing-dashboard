@@ -19,10 +19,12 @@ const CampaignModal = ({ isOpen, onClose }) => {
     const [generatedImages, setGeneratedImages] = useState({}); // { 'LinkedIn-v0-s0': 'base64...' }
     const [publishPlan, setPublishPlan] = useState('Schedule For Later');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [generationCount, setGenerationCount] = useState(0);
+    const [platformStyleDetails, setPlatformStyleDetails] = useState({});
 
     // Overlay State
     const [overlayHeadline, setOverlayHeadline] = useState('');
-    const [overlaySubtext, setOverlaySubtext] = useState('Stop juggling disconnected tools. DataSync Pro unifies your workflow.');
+    const [overlaySubtext, setOverlaySubtext] = useState('');
     const [overlayCTA, setOverlayCTA] = useState('Learn More');
     const [logoPosition, setLogoPosition] = useState('top left');
     const [overlayLogo, setOverlayLogo] = useState(null);
@@ -31,8 +33,12 @@ const CampaignModal = ({ isOpen, onClose }) => {
     const { user } = useAuth();
 
     useEffect(() => {
-        if (isOpen && user) {
-            fetchBrands();
+        if (isOpen) {
+            setGenerationCount(0);
+            setPlatformStyleDetails({});
+            if (user) {
+                fetchBrands();
+            }
         }
     }, [isOpen, user]);
 
@@ -64,8 +70,9 @@ const CampaignModal = ({ isOpen, onClose }) => {
         if (formData.brand && brands.length > 0) {
             const selectedBrand = brands.find(b => b.name === formData.brand);
             if (selectedBrand) {
-                if (!overlayLogo) setOverlayLogo(selectedBrand.logo);
-                if (overlayCTA === 'Learn More') setOverlayCTA(selectedBrand.cta_style || 'Learn More');
+                if (!overlayLogo) setOverlayLogo(selectedBrand.logo_url || selectedBrand.logo);
+                setOverlayCTA(selectedBrand.cta_style || 'Learn More');
+                if (selectedBrand.tagline) setOverlaySubtext(selectedBrand.tagline);
             }
         }
     }, [formData.brand, brands]);
@@ -83,21 +90,49 @@ const CampaignModal = ({ isOpen, onClose }) => {
         const results = {};
 
         try {
+            const selectedBrand = brands.find(b => b.name === formData.brand);
+
             for (const platform of formData.platforms) {
+                // Build rich brand context from the brand's DNA
+                const brandTone = selectedBrand?.tone
+                    ? (formData.tone && formData.tone !== selectedBrand.tone
+                        ? `${selectedBrand.tone}, leaning ${formData.tone}`
+                        : selectedBrand.tone)
+                    : (formData.tone || 'Professional');
+                const brandValues = selectedBrand?.values?.length ? selectedBrand.values.join(', ') : '';
+                const brandAesthetic = selectedBrand?.aesthetic || '';
+                const brandTagline = selectedBrand?.tagline || '';
+                const brandOverview = selectedBrand?.business_overview || '';
+                const brandCTA = selectedBrand?.cta_style || 'Learn More';
+                const brandAudience = formData.audience || selectedBrand?.target_audience || '';
+
                 const prompt = `
-                    Generate 2 organic social media post captions for the following product:
-                    Brand: ${formData.brand}
+                    Generate 2 organic social media post captions for the following product that STRICTLY follow the brand's voice, style, and identity.
+
+                    === BRAND DNA (MANDATORY — all copy must adhere to this) ===
+                    Brand Name: ${formData.brand}
+                    ${brandTagline ? `Brand Tagline: ${brandTagline}` : ''}
+                    ${brandOverview ? `Brand Overview: ${brandOverview}` : ''}
+                    ${brandValues ? `Brand Values: ${brandValues}` : ''}
+                    ${brandAesthetic ? `Visual Aesthetic: ${brandAesthetic}` : ''}
+                    Brand Tone of Voice: ${brandTone}
+                    Default CTA: ${brandCTA}
+
+                    === CAMPAIGN BRIEF ===
                     Product Name: ${formData.productName}
                     Campaign Objective: ${formData.objective}
                     Product Description: ${formData.description}
-                    Target Audience: ${formData.audience}
-                    Tone: ${formData.tone}
+                    ${brandAudience ? `Target Audience: ${brandAudience}` : ''}
                     Platform: ${platform}
 
-                    Requirements:
-                    1. The style must be an organic post type caption (engaging, relatable, value-driven) rather than a formal ad format.
-                    2. Provide TWO distinct variants.
-                    3. Return ONLY a JSON object with exactly this structure:
+                    === REQUIREMENTS ===
+                    1. Every caption must sound unmistakably like ${formData.brand} — reflect their tone, values, and aesthetic.
+                    2. Use the brand's default CTA ("${brandCTA}") naturally within or at the end of the caption body.
+                    3. ${brandTagline ? `The tagline is "${brandTagline}" — echo its spirit but do NOT copy it verbatim.` : 'End with a compelling closing line.'}
+                    4. The style must be an organic post type caption (engaging, relatable, value-driven) rather than a formal ad format.
+                    5. Tailor the copy specifically for ${platform} — respect its norms (LinkedIn = professional storytelling, Instagram = punchy/visual, Facebook = community-driven).
+                    6. Provide TWO distinct variants with different angles/hooks.
+                    7. Return ONLY a JSON object with exactly this structure:
                     {"variants": [{"title": "Short catchy hook/headline", "body": "Post caption content", "chars": length_of_body_number}]}
                 `;
 
@@ -137,6 +172,12 @@ const CampaignModal = ({ isOpen, onClose }) => {
             const firstPlatform = formData.platforms[0];
             setOverlayHeadline(results[firstPlatform]?.[0]?.title || '');
 
+            // Auto-populate overlay subtext from brand tagline if available
+            const brandForOverlay = brands.find(b => b.name === formData.brand);
+            if (brandForOverlay?.tagline) {
+                setOverlaySubtext(brandForOverlay.tagline);
+            }
+
             setStep(2);
         } catch (error) {
             console.error("Generation failed:", error);
@@ -158,6 +199,10 @@ const CampaignModal = ({ isOpen, onClose }) => {
                 .from('campaigns')
                 .insert([{
                     user_id: user.id,
+                    user_email: user.email,
+                    user_name: user.displayName || user.email.split('@')[0],
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
                     brand: formData.brand,
                     product_name: formData.productName,
                     objective: formData.objective,
@@ -169,7 +214,8 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     selected_variants: selectedVariants,
                     generated_images: generatedImages,
                     publish_plan: publishPlan,
-                    status: 'Pending Approval'
+                    status: 'Pending Approval',
+                    platform_style_details: platformStyleDetails
                 }])
                 .select();
 
@@ -205,6 +251,11 @@ const CampaignModal = ({ isOpen, onClose }) => {
     };
 
     const handleGenerateVisuals = async () => {
+        if (generationCount >= 3) {
+            alert("You have reached the maximum limit of 3 visual generations per campaign.");
+            return;
+        }
+
         setIsGeneratingImage(true);
         const newImages = { ...generatedImages };
 
@@ -217,9 +268,32 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
             const numSlides = postType === 'Carousel Post' ? 4 : 1;
 
+            // 1st API Call: study brand details on the platform
+            const studyResponse = await fetch(`${apiBaseUrl}/study-platform-style`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    brand_name: formData.brand || 'Your Brand',
+                    platform: platform,
+                    website_url: selectedBrand?.website_url || '',
+                    colors: selectedBrand?.colors || {},
+                    typography: selectedBrand?.typography || {},
+                    layout_pattern: selectedBrand?.layout_pattern || '',
+                    aesthetic: selectedBrand?.aesthetic || ''
+                })
+            });
+
+            if (!studyResponse.ok) throw new Error("Failed to study platform brand style");
+            const studyData = await studyResponse.json();
+
+            if (studyData.studied_details) {
+                setPlatformStyleDetails(prev => ({ ...prev, [platform]: studyData.studied_details }));
+            }
+
             for (let s = 0; s < numSlides; s++) {
                 const imageKey = `${platform}-${variantIdx}${numSlides > 1 ? `-slide${s}` : ''}`;
 
+                // 2nd API Call: generate the image with the platform-specific brand details
                 const response = await fetch(`${apiBaseUrl}/generate-image`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -236,15 +310,26 @@ const CampaignModal = ({ isOpen, onClose }) => {
                         typography: selectedBrand?.typography || {},
                         layout_pattern: selectedBrand?.layout_pattern || '',
                         slide_number: s + 1,
-                        total_slides: numSlides
+                        total_slides: numSlides,
+                        website_url: selectedBrand?.website_url || '',
+                        
+                        // Pass studied details
+                        platform_brand_style: studyData.brand_style || '',
+                        platform_template: studyData.template || '',
+                        platform_font: studyData.font || '',
+                        platform_primary_color: studyData.primary_color || '',
+                        platform_background_color: studyData.background_color || '',
+                        platform_layout_pattern: studyData.layout_pattern || '',
+                        studied_details: studyData.studied_details || ''
                     })
                 });
 
                 if (!response.ok) throw new Error(`Image API error for ${platform} slide ${s + 1}`);
                 const data = await response.json();
-                newImages[imageKey] = `data:${data.mime_type};base64,${data.image}`;
+                newImages[imageKey] = data.image_url || `data:${data.mime_type};base64,${data.image}`;
                 setGeneratedImages({ ...newImages }); // Update state incrementally for better UX
             }
+            setGenerationCount(prev => prev + 1);
         } catch (error) {
             console.error("Visual generation failed:", error);
             const hostname = window.location.hostname;
@@ -257,6 +342,15 @@ const CampaignModal = ({ isOpen, onClose }) => {
         } finally {
             setIsGeneratingImage(false);
         }
+    };
+
+    const handleRegenerate = async () => {
+        if (generationCount >= 3) {
+            alert("You can only regenerate visuals up to 3 times per campaign.");
+            return;
+        }
+        setGenerationCount(prev => prev + 1);
+        await handleGenerateVisuals();
     };
 
     const handleDownload = (imageBase64, filename, isSquare = true) => {
@@ -275,39 +369,6 @@ const CampaignModal = ({ isOpen, onClose }) => {
             const scale = canvas.width / 400;
             const padding = 15 * scale;
 
-            // 1. Draw Overlay Card in bottom-right (Compact)
-            const cardWidth = 140 * scale;
-            const cardHeight = 65 * scale;
-            const cardPadding = 10 * scale;
-            const cornerRadius = 10 * scale;
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
-            ctx.shadowBlur = 10 * scale;
-            ctx.shadowColor = 'rgba(0,0,0,0.1)';
-            ctx.beginPath();
-            ctx.roundRect(canvas.width - cardWidth - padding, canvas.height - cardHeight - padding, cardWidth, cardHeight, cornerRadius);
-            ctx.fill();
-            ctx.shadowBlur = 0; // Reset shadow
-
-            // 2. Draw Headline
-            ctx.fillStyle = '#0f172a';
-            ctx.font = `bold ${11 * scale}px Arial`;
-            ctx.textAlign = 'left';
-            ctx.fillText(overlayHeadline.substring(0, 20), canvas.width - cardWidth - padding + cardPadding, canvas.height - cardHeight - padding + (18 * scale));
-
-            // 3. Draw CTA Button (Tiny)
-            const btnWidth = 80 * scale;
-            const btnHeight = 22 * scale;
-            ctx.fillStyle = '#4f46e5';
-            ctx.beginPath();
-            ctx.roundRect(canvas.width - cardWidth - padding + cardPadding, canvas.height - padding - (30 * scale), btnWidth, btnHeight, 5 * scale);
-            ctx.fill();
-
-            ctx.fillStyle = 'white';
-            ctx.font = `bold ${9 * scale}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.fillText(overlayCTA, canvas.width - cardWidth - padding + cardPadding + (btnWidth / 2), canvas.height - padding - (30 * scale) + (14 * scale));
-
             // 4. Draw Real Logo
             if (overlayLogo) {
                 const logoImg = new Image();
@@ -324,9 +385,9 @@ const CampaignModal = ({ isOpen, onClose }) => {
                     } else if (logoPosition === 'bottom left') {
                         logoX = padding; logoY = canvas.height - padding - logoSize;
                     } else {
-                        // Offset from CTA card if bottom right
+                        // Position directly in bottom right corner
                         logoX = canvas.width - padding - logoSize;
-                        logoY = canvas.height - cardHeight - padding - logoSize - (10 * scale);
+                        logoY = canvas.height - padding - logoSize;
                     }
 
                     // Draw logo with white bg for contrast
@@ -430,8 +491,9 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                 audience: selectedBrand?.target_audience || formData.audience
                                             });
                                             if (selectedBrand) {
-                                                setOverlayLogo(selectedBrand.logo);
+                                                setOverlayLogo(selectedBrand.logo_url || selectedBrand.logo);
                                                 setOverlayCTA(selectedBrand.cta_style || 'Learn More');
+                                                if (selectedBrand.tagline) setOverlaySubtext(selectedBrand.tagline);
                                             }
                                         }}
                                     >
@@ -541,9 +603,27 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                     <h3 className="text-lg font-bold text-slate-900 mb-1 font-black">Organic Post Variants</h3>
                                     <p className="text-sm text-slate-500">Pick the best caption to proceed to the Visual Studio.</p>
                                 </div>
-                                <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl">
-                                    <Sparkles className="w-4 h-4 text-indigo-600" />
-                                    <span className="text-xs font-bold text-indigo-700">Selection required for each platform</span>
+                                <div className="flex items-center gap-3 flex-wrap justify-end">
+                                    {/* Brand DNA badge */}
+                                    {formData.brand && (() => {
+                                        const bd = brands.find(b => b.name === formData.brand);
+                                        if (!bd) return null;
+                                        return (
+                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                {(bd.logo_url || bd.logo) ? (
+                                                    <img src={bd.logo_url || bd.logo} className="w-4 h-4 object-contain rounded" alt="" />
+                                                ) : (
+                                                    <div className="w-4 h-4 rounded bg-emerald-500 flex items-center justify-center text-[8px] font-black text-white">{(bd.name || '').substring(0, 1)}</div>
+                                                )}
+                                                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Brand DNA Applied</span>
+                                                {bd.tone && <span className="hidden sm:inline text-[9px] font-bold text-emerald-500 uppercase tracking-widest border-l border-emerald-200 pl-2">· {bd.tone}</span>}
+                                            </div>
+                                        );
+                                    })()}
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl">
+                                        <Sparkles className="w-4 h-4 text-indigo-600" />
+                                        <span className="text-xs font-bold text-indigo-700">Selection required for each platform</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -661,6 +741,41 @@ const CampaignModal = ({ isOpen, onClose }) => {
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
                                 {/* Configuration Sidebar */}
                                 <div className="lg:col-span-4 space-y-8">
+                                    {/* Brand Identity Summary */}
+                                    {(() => {
+                                        const bd = brands.find(b => b.name === formData.brand);
+                                        if (!bd) return null;
+                                        const colors = Object.values(bd.colors || {}).slice(0, 3);
+                                        return (
+                                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brand Identity</p>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+                                                        {(bd.logo_url || bd.logo) ? (
+                                                            <img src={bd.logo_url || bd.logo} className="w-full h-full object-contain" alt="" />
+                                                        ) : (
+                                                            <span className="text-xs font-black text-primary-600">{(bd.name || '').substring(0, 2)}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-slate-900 truncate">{bd.name}</p>
+                                                        {bd.tone && <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{bd.tone}</p>}
+                                                    </div>
+                                                    {colors.length > 0 && (
+                                                        <div className="flex gap-1 ml-auto shrink-0">
+                                                            {colors.map((c, i) => (
+                                                                <div key={i} className="w-4 h-4 rounded-full border border-white shadow-sm" style={{ backgroundColor: c }} title={c} />
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {bd.tagline && (
+                                                    <p className="text-[10px] text-slate-500 italic font-medium leading-relaxed border-t border-slate-100 pt-2">"{bd.tagline}"</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="space-y-4">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Post Type</label>
                                         <div className="flex gap-4 p-1 bg-slate-100 rounded-xl">
@@ -671,27 +786,6 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                     className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${postType === type ? 'bg-white text-primary-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                                 >
                                                     {type}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Template</label>
-                                        <div className="grid grid-cols-3 gap-3">
-                                            {['Minimal', 'Bold', 'Gradient'].map(t => (
-                                                <button
-                                                    key={t}
-                                                    onClick={() => setSelectedTemplate(t)}
-                                                    className={`aspect-[4/5] rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${selectedTemplate === t
-                                                        ? 'bg-primary-50 border-primary-600 ring-4 ring-primary-50'
-                                                        : 'bg-white border-slate-100 hover:border-slate-300'
-                                                        }`}
-                                                >
-                                                    <div className={`w-8 h-10 rounded shadow-sm ${t === 'Minimal' ? 'bg-white' :
-                                                        t === 'Bold' ? 'bg-primary-600' : 'bg-gradient-to-br from-primary-500 to-indigo-600'
-                                                        }`} />
-                                                    <span className={`text-[10px] font-bold ${selectedTemplate === t ? 'text-primary-700' : 'text-slate-500'}`}>{t}</span>
                                                 </button>
                                             ))}
                                         </div>
@@ -734,12 +828,24 @@ const CampaignModal = ({ isOpen, onClose }) => {
 
                                     <button
                                         onClick={handleGenerateVisuals}
-                                        disabled={isGeneratingImage || !Object.values(selectedVariants).some(v => v?.length > 0)}
-                                        className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70"
+                                        disabled={isGeneratingImage || generationCount >= 3 || !Object.values(selectedVariants).some(v => v?.length > 0)}
+                                        className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
                                         {isGeneratingImage ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                                        {isGeneratingImage ? "Designing Artwork..." : !Object.values(selectedVariants).some(v => v?.length > 0) ? "Select a Variant First" : "Generate AI Visuals"}
+                                        {isGeneratingImage ? "Designing Artwork..." : !Object.values(selectedVariants).some(v => v?.length > 0) ? "Select a Variant First" : `Generate AI Visuals (${3 - generationCount} remaining)`}
                                     </button>
+
+                                    {platformStyleDetails[activePlatform] && (
+                                        <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2 mt-4 text-left">
+                                            <h4 className="text-[10px] font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                                                Studied {activePlatform} Style
+                                            </h4>
+                                            <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                                                {platformStyleDetails[activePlatform]}
+                                            </p>
+                                        </div>
+                                    )}
 
                                     <button
                                         onClick={() => {
@@ -752,11 +858,11 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                     >
                                         <Download className="w-4 h-4" /> Download PNG
                                     </button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* Previews */}
-                            <div className="lg:col-span-8 space-y-8">
+                                {/* Previews */}
+                                <div className="lg:col-span-8 space-y-8">
                                 <div className="space-y-6">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Asset Previews</label>
@@ -776,6 +882,16 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                             {img ? (
                                                                 <>
                                                                     <img src={img} className="w-full h-full object-cover" alt={`Slide ${s + 1}`} />
+                                                                    <div className="absolute top-2 left-2 z-40">
+                                                                        <button
+                                                                            onClick={handleRegenerate}
+                                                                            disabled={isGeneratingImage || generationCount >= 3}
+                                                                            className="p-1.5 bg-white/90 backdrop-blur-md rounded-full shadow-lg text-indigo-600 hover:text-indigo-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            title={`Regenerate visuals (${3 - generationCount} remaining)`}
+                                                                        >
+                                                                            <Sparkles className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
                                                                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-40">
                                                                         <button
                                                                             onClick={() => handleDownload(img, `${formData.productName}-slide${s + 1}.png`)}
@@ -805,20 +921,22 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                     {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
                                                         <>
                                                             <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Square Preview" />
+                                                            <div className="absolute top-4 left-4 z-40">
+                                                                <button
+                                                                    onClick={handleRegenerate}
+                                                                    disabled={isGeneratingImage || generationCount >= 3}
+                                                                    className="p-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg text-indigo-600 hover:text-indigo-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    title={`Regenerate visuals (${3 - generationCount} remaining)`}
+                                                                >
+                                                                    <Sparkles className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
                                                                 <button
                                                                     onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-square.png`)}
                                                                     className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
                                                                 >
                                                                     <Download className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-
-                                                            {/* Text Overlay Card */}
-                                                            <div className="absolute right-3 bottom-3 w-40 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
-                                                                <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
-                                                                <button className="mt-2 w-full py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
-                                                                    {overlayCTA}
                                                                 </button>
                                                             </div>
 
@@ -853,20 +971,22 @@ const CampaignModal = ({ isOpen, onClose }) => {
                                                     {generatedImages[`${activePlatform}-${activeVariant - 1}`] ? (
                                                         <>
                                                             <img src={generatedImages[`${activePlatform}-${activeVariant - 1}`]} className="w-full h-full object-cover" alt="Landscape Preview" />
+                                                            <div className="absolute top-4 left-4 z-40">
+                                                                <button
+                                                                    onClick={handleRegenerate}
+                                                                    disabled={isGeneratingImage || generationCount >= 3}
+                                                                    className="p-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg text-indigo-600 hover:text-indigo-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    title={`Regenerate visuals (${3 - generationCount} remaining)`}
+                                                                >
+                                                                    <Sparkles className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity z-40">
                                                                 <button
                                                                     onClick={() => handleDownload(generatedImages[`${activePlatform}-${activeVariant - 1}`], `${formData.productName}-${activePlatform}-landscape.png`, false)}
                                                                     className="p-2 bg-white/90 backdrop-blur-md rounded-lg shadow-lg text-slate-700 hover:text-primary-600 transition-colors"
                                                                 >
                                                                     <Download className="w-4 h-4" />
-                                                                </button>
-                                                            </div>
-
-                                                            {/* Text Overlay Card */}
-                                                            <div className="absolute right-3 bottom-3 w-48 bg-white/95 backdrop-blur-md p-3 rounded-xl shadow-2xl border border-white z-40 transition-all duration-300">
-                                                                <h4 className="text-[10px] font-black text-slate-900 leading-tight mb-1 truncate">{overlayHeadline}</h4>
-                                                                <button className="mt-2 px-4 py-1.5 bg-primary-600 text-white text-[9px] font-bold rounded-lg shadow-md shadow-primary-700/20 uppercase tracking-widest">
-                                                                    {overlayCTA}
                                                                 </button>
                                                             </div>
 
