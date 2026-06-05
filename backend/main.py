@@ -43,7 +43,9 @@ app.add_middleware(
 )
 
 # Service account credentials (used for Firestore DB and Vertex AI)
-CREDENTIALS_PATH = r"C:\marketing-dashboard\tenxds-agents-idp-d6255abdab11.json"
+default_cred_path = r"C:\marketing-dashboard\tenxds-agents-idp-d6255abdab11.json"
+# Read from env var if set (useful for Render), else use local default
+CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", default_cred_path)
 DATABASE_NAME = "marketing-agents"
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS_PATH
 PROJECT_ID = "tenxds-agents-idp"
